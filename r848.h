@@ -22,14 +22,7 @@
 #define R848_H
 
 #include <linux/kconfig.h>
-#include "dvb_frontend.h"
-
-
-
-
-
-
-
+#include <media/dvb_frontend.h>
 
 struct r848_config {
 	/* tuner i2c address */
@@ -48,7 +41,7 @@ struct r848_config {
 
 };
 
-#if IS_ENABLED(CONFIG_MEDIA_TUNER_R848)
+#if IS_REACHABLE(CONFIG_MEDIA_TUNER_R848)
 extern struct dvb_frontend *r848_attach(struct dvb_frontend *fe,
 		struct r848_config *cfg, struct i2c_adapter *i2c);
 #else
