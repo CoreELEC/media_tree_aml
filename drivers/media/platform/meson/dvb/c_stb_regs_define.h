@@ -7,7 +7,7 @@
  **/
 #ifndef __MACH_MESON8_REG_ADDR_H_
 #define __MACH_MESON8_REG_ADDR_H_
-#include <linux/amlogic/iomap.h>
+//#include <linux/amlogic/iomap.h>
 #define CBUS_REG_ADDR(_r) aml_read_cbus(_r)
 #define HHI_DEMOD_MEM_PD_REG         (0xc883c000 + (0x43 << 2))
 #define STB_TOP_CONFIG 0x16f0

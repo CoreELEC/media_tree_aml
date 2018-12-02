@@ -26,7 +26,7 @@
 #include <linux/init.h>
 #include <linux/string.h>
 #include <linux/bitrev.h>
-#include <linux/amlogic/aml_gpio_consumer.h>
+#include <linux/gpio.h>
 
 #include "media/dvb_frontend.h"
 #include "avl6862.h"
@@ -1743,6 +1743,57 @@ static struct dvb_frontend_ops avl6862_ops = {
 	.set_frontend			= avl6862_set_frontend,
 };
 
+static struct dvb_frontend_ops avl6762_ops = {
+	.delsys = {SYS_DVBT, SYS_DVBT2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_B},
+	.info = {
+		.name			= "Availink AVL6762",
+		.frequency_min_hz	= 175 * MHz,
+		.frequency_max_hz	= 858 * MHz,
+		.frequency_stepsize_hz	= 0,
+		.frequency_tolerance_hz	= 0,
+		.symbol_rate_min	= 1000000,
+		.symbol_rate_max	= 45000000,
+		.caps = FE_CAN_FEC_1_2                 |
+			FE_CAN_FEC_2_3                 |
+			FE_CAN_FEC_3_4                 |
+			FE_CAN_FEC_4_5                 |
+			FE_CAN_FEC_5_6                 |
+			FE_CAN_FEC_6_7                 |
+			FE_CAN_FEC_7_8                 |
+			FE_CAN_FEC_AUTO                |
+			FE_CAN_QPSK                    |
+			FE_CAN_QAM_16                  |
+			FE_CAN_QAM_32                  |
+			FE_CAN_QAM_64                  |
+			FE_CAN_QAM_128                 |
+			FE_CAN_QAM_256                 |
+			FE_CAN_QAM_AUTO                |
+			FE_CAN_TRANSMISSION_MODE_AUTO  |
+			FE_CAN_GUARD_INTERVAL_AUTO     |
+			FE_CAN_HIERARCHY_AUTO          |
+			FE_CAN_MUTE_TS                 |
+			FE_CAN_2G_MODULATION           |
+			FE_CAN_MULTISTREAM             |
+			FE_CAN_INVERSION_AUTO
+	},
+
+	.release			= avl6862_release,
+	.init				= avl6862_init,
+
+	.sleep				= avl6862_sleep,
+	.i2c_gate_ctrl			= avl6862_i2c_gate_ctrl,
+
+	.read_status			= avl6862_read_status,
+	.read_signal_strength		= avl6862_read_signal_strength,
+	.read_snr			= avl6862_read_snr,
+	.read_ber			= avl6862_read_ber,
+	.get_frontend_algo		= avl6862fe_algo,
+	.tune				= avl6862_tune,
+
+// 	.set_property			= NULL, // avl6862_set_property,
+	.set_frontend			= avl6862_set_frontend,
+};
+
 
 struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 					struct i2c_adapter *i2c)
@@ -1755,8 +1806,10 @@ struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 	if (priv == NULL)
 		goto err;
 
-	memcpy(&priv->frontend.ops, &avl6862_ops,
-		sizeof(struct dvb_frontend_ops));
+        if (config->tuner_address)
+		memcpy(&priv->frontend.ops, &avl6862_ops, sizeof(struct dvb_frontend_ops));
+        else
+		memcpy(&priv->frontend.ops, &avl6762_ops, sizeof(struct dvb_frontend_ops));
 
 	priv->frontend.demodulator_priv = priv;
 	priv->config = config;
@@ -1788,9 +1841,15 @@ struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 	dev_info(&priv->i2c->dev, "%s: found AVL%d " \
 				"family_id=0x%x", KBUILD_MODNAME, id, fid);
 
-	if (!avl6862_set_dvbmode(&priv->frontend, SYS_DVBS))
-	    return &priv->frontend;
-
+        if (config->tuner_address) {
+		if (!avl6862_set_dvbmode(&priv->frontend, SYS_DVBS))
+		    return &priv->frontend;
+	} 
+	else {
+		if (!avl6862_set_dvbmode(&priv->frontend, SYS_DVBT))
+		    return &priv->frontend;
+	} 
+	
 err1:
 	kfree(priv);
 err:

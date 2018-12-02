@@ -22,12 +22,8 @@
 #include <linux/delay.h>
 #include <asm/cacheflush.h>
 #include <linux/dma-mapping.h>
-#ifdef ARC_700
-#include <asm/arch/am_regs.h>
-#else
 #include "c_stb_define.h"
 #include "c_stb_regs_define.h"
-#endif
 
 #define DMX_USE_SWFILTER    0x100
 
@@ -77,11 +73,11 @@
 	} while (0)
 
 MODULE_PARM_DESC(debug_dmx, "\n\t\t Enable demux debug information");
-static int debug_dmx;
+static int debug_dmx = 0;
 module_param(debug_dmx, int, 0644);
 
 MODULE_PARM_DESC(debug_irq, "\n\t\t Enable demux IRQ debug information");
-static int debug_irq;
+static int debug_irq = 0;
 module_param(debug_irq, int, 0644);
 
 static int npids = CHANNEL_COUNT;
@@ -133,9 +129,13 @@ module_param(force_pes_sf, int, 0644);
 		} \
 	} while (0)
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#define READ_PERI_REG			READ_VCBUS_REG
+#define WRITE_PERI_REG			WRITE_VCBUS_REG
+#else
 #define READ_PERI_REG			READ_CBUS_REG
 #define WRITE_PERI_REG			WRITE_CBUS_REG
-
+#endif
 #define READ_ASYNC_FIFO_REG(i, r)\
 	((i) ? READ_PERI_REG(ASYNC_FIFO2_##r) : READ_PERI_REG(ASYNC_FIFO_##r))
 
@@ -183,6 +183,13 @@ MOD_PARAM_DECLARE_CHANPROC(2);
 
 #define DMX_CH_OP_CHANREC  0
 #define DMX_CH_OP_CHANPROC 1
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)                        
+extern int aml_read_cbus(unsigned int reg);
+extern void aml_write_cbus(unsigned int reg, unsigned int val);
+extern int aml_read_vcbus(unsigned int reg);
+extern void aml_write_vcbus(unsigned int reg, unsigned int val);
+#endif
 
 static inline int _setbit(int v, int b) { return v|(1<<b); }
 static inline int _clrbit(int v, int b) { return v&~(1<<b); }
@@ -313,7 +320,7 @@ static u32 first_audio_pts;
 static int demux_skipbyte;
 static int tsfile_clkdiv = 4;
 
-#define SF_DMX_ID 2
+#define SF_DMX_ID 1
 #define SF_AFIFO_ID 1
 
 #define sf_dmx_sf(_dmx) \
@@ -326,9 +333,9 @@ static int tsfile_clkdiv = 4;
 
 
 /*Section buffer watchdog*/
-static void section_buffer_watchdog_func(unsigned long arg)
+static void section_buffer_watchdog_func(struct timer_list *t)
 {
-	struct aml_dvb *dvb = (struct aml_dvb *)arg;
+	struct aml_dvb *dvb = from_timer(dvb, t, watchdog_timer);
 	struct aml_dmx *dmx;
 	u32 section_busy32 = 0, om_cmd_status32 = 0,
 	    demux_channel_activity32 = 0;
@@ -847,7 +854,6 @@ static void process_section(struct aml_dmx *dmx)
 			/* get filter number */
 			DMX_WRITE_REG(dmx->id, SEC_BUFF_NUMBER, i);
 			sec_num = (DMX_READ_REG(dmx->id, SEC_BUFF_NUMBER) >> 8);
-	pr_dbg("%d. sec_busy:%08x sec_num:%d\n", i, sec_busy, sec_num); 
 
 			/*
 			 * sec_buf_watchdog_count dispatch:
@@ -1270,12 +1276,12 @@ static void stb_enable(struct aml_dvb *dvb)
 	case AM_TS_SRC_DMX0:
 		src = dvb->dmx[0].source;
 		break;
-	case AM_TS_SRC_DMX1:
-		src = dvb->dmx[1].source;
-		break;
-	case AM_TS_SRC_DMX2:
-		src = dvb->dmx[2].source;
-		break;
+//	case AM_TS_SRC_DMX1:
+//		src = dvb->dmx[1].source;
+//		break;
+//	case AM_TS_SRC_DMX2:
+//		src = dvb->dmx[2].source;
+//		break;
 	default:
 		src = dvb->stb_source;
 		break;
@@ -1320,12 +1326,12 @@ static void stb_enable(struct aml_dvb *dvb)
 	case AM_TS_SRC_DMX0:
 		tso_src = dvb->dmx[0].source;
 		break;
-	case AM_TS_SRC_DMX1:
-		tso_src = dvb->dmx[1].source;
-		break;
-	case AM_TS_SRC_DMX2:
-		tso_src = dvb->dmx[2].source;
-		break;
+//	case AM_TS_SRC_DMX1:
+//		tso_src = dvb->dmx[1].source;
+//		break;
+//	case AM_TS_SRC_DMX2:
+//		tso_src = dvb->dmx[2].source;
+//		break;
 	default:
 		tso_src = dvb->tso_source;
 		break;
@@ -1356,8 +1362,6 @@ static void stb_enable(struct aml_dvb *dvb)
 		break;
 	}
 
-	pr_dbg("[stb]src:%d tso:%d out_src:%d\n", src, tso_src, out_src);
-
 	fec_s0 = 0;
 	fec_s1 = 0;
 	invert0 = 0;
@@ -1372,7 +1376,6 @@ static void stb_enable(struct aml_dvb *dvb)
 
 	invert0 = dvb->s2p[0].invert;
 	invert1 = dvb->s2p[1].invert;
-	pr_dbg("fec_s0:%d, invert0:%d fec_s1:%d invert1:%d en_des:%d\n", fec_s0, invert0, fec_s1, invert1, en_des);
 
 	WRITE_MPEG_REG(STB_TOP_CONFIG,
 		       (invert1 << INVERT_S2P1_FEC_CLK) |
@@ -1479,6 +1482,7 @@ static int dmx_alloc_sec_buffer(struct aml_dmx *dmx)
 	unsigned long grp_addr[SEC_BUF_GRP_COUNT];
 	int grp_len[SEC_BUF_GRP_COUNT];
 	int i;
+	pr_dbg("start...\n");
 
 	if (dmx->sec_pages)
 		return 0;
@@ -1642,7 +1646,6 @@ int async_fifo_init(struct aml_asyncfifo *afifo, int initirq,
 			int buf_len, unsigned long buf)
 {
 	int ret = 0;
-	int irq;
 
 	if (afifo->init)
 		return -1;
@@ -1661,10 +1664,21 @@ int async_fifo_init(struct aml_asyncfifo *afifo, int initirq,
 
 	tasklet_init(&afifo->asyncfifo_tasklet,
 			dvr_irq_bh_handler, (unsigned long)afifo);
-	if (initirq)
-		irq = request_irq(afifo->asyncfifo_irq,	dvr_irq_handler,
+	if (initirq) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+		struct aml_dvb *dvb = afifo->dvb;
+		ret = devm_request_irq(dvb->dev, dvb->afifo_irq, dvr_irq_handler, IRQF_SHARED, "afifoirq", afifo);
+		if (ret) {
+			pr_dbg("err: %d asyncfifo_irq:%d\n", ret, afifo->asyncfifo_irq);
+			return ret;
+		}
+		pr_dbg("asyncfifo_irq:%d\n", afifo->asyncfifo_irq);
+#else
+		ret = request_irq(afifo->asyncfifo_irq,	dvr_irq_handler,
 				IRQF_SHARED|IRQF_TRIGGER_RISING,
 				"dvr irq", afifo);
+#endif
+	}
 	else
 		enable_irq(afifo->asyncfifo_irq);
 
@@ -1731,8 +1745,6 @@ static int _dmx_smallsec_enable(struct aml_smallsec *ss, int bufsize)
 	ss->bufsize = bufsize;
 	ss->enable = 1;
 
-	pr_inf("demux%d smallsec buf start: %lx, size: %d\n",
-		ss->dmx->id, ss->buf, ss->bufsize);
 	return 0;
 }
 
@@ -1849,7 +1861,7 @@ static int dmx_timeout_set(struct aml_dmxtimeout *dto, int enable,
 static int dmx_init(struct aml_dmx *dmx)
 {
 	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
-	int irq;
+	int ret;
 
 	if (dmx->init) {
 		return 0;
@@ -1857,12 +1869,18 @@ static int dmx_init(struct aml_dmx *dmx)
 
 	/*Register irq handlers */
 	if (dmx->dmx_irq != -1) {
-		tasklet_init(&dmx->dmx_tasklet,
-				dmx_irq_bh_handler,
-				(unsigned long)dmx);
-		irq = request_irq(dmx->dmx_irq,	dmx_irq_handler,
+		tasklet_init(&dmx->dmx_tasklet, dmx_irq_bh_handler, (unsigned long)dmx);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+		ret = devm_request_irq(dvb->dev, dvb->demux_irq, dmx_irq_handler, IRQF_SHARED, "demuxirq", dmx);
+		if (ret) {
+			pr_dbg("err: %d request_irq:%d, %d\n", ret, dmx->dmx_irq, dvb->demux_irq);
+			return ret;
+		}
+#else
+		ret = request_irq(dmx->dmx_irq,	dmx_irq_handler,
 				IRQF_SHARED|IRQF_TRIGGER_RISING,
 				"dmx irq", dmx);
+#endif
 		pr_dbg("request_irq:%d\n", dmx->dmx_irq);
 	}
 
@@ -1878,13 +1896,9 @@ static int dmx_init(struct aml_dmx *dmx)
 
 	/*Reset the hardware */
 	if (!dvb->dmx_init) {
-		init_timer(&dvb->watchdog_timer);
-		dvb->watchdog_timer.function = section_buffer_watchdog_func;
-		dvb->watchdog_timer.expires =
-		    jiffies + msecs_to_jiffies(WATCHDOG_TIMER);
-		dvb->watchdog_timer.data = (unsigned long)dvb;
+		timer_setup(&dvb->watchdog_timer, section_buffer_watchdog_func, 0);
 #ifdef ENABLE_SEC_BUFF_WATCHDOG
-		add_timer(&dvb->watchdog_timer);
+		mod_timer(&dvb->watchdog_timer, jiffies + msecs_to_jiffies(WATCHDOG_TIMER));
 #endif
 		dmx_reset_hw(dvb);
 	}
@@ -2642,7 +2656,7 @@ void dmx_reset_hw(struct aml_dvb *dvb)
 /*Reset the demux device*/
 void dmx_reset_hw_ex(struct aml_dvb *dvb, int reset_irq)
 {
-	int id, times;
+	int id;
 
 	pr_dbg("demux reset begin\n");
 
@@ -2660,17 +2674,30 @@ void dmx_reset_hw_ex(struct aml_dvb *dvb, int reset_irq)
 	if (reset_irq)
 		del_timer_sync(&dvb->watchdog_timer);
 #endif
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+pr_dbg("WRITE_MPEG_REG(RESET1_REGISTER, RESET_DEMUXSTB);\n");
+/**********************************************************************************************FIXME
 	WRITE_MPEG_REG(RESET1_REGISTER, RESET_DEMUXSTB);
 
 	for (id = 0; id < DMX_DEV_COUNT; id++) {
-		times = 0;
+		int times = 0;
 		while (times++ < 1000000) {
 			if (!(DMX_READ_REG(id, OM_CMD_STATUS) & 0x01))
 				break;
 		}
 	}
+***************************************************************************************************/
+#else
+	WRITE_MPEG_REG(RESET1_REGISTER, RESET_DEMUXSTB);
 
+	for (id = 0; id < DMX_DEV_COUNT; id++) {
+		int times = 0;
+		while (times++ < 1000000) {
+			if (!(DMX_READ_REG(id, OM_CMD_STATUS) & 0x01))
+				break;
+		}
+	}
+#endif
 	WRITE_MPEG_REG(STB_TOP_CONFIG, 0);
 
 	for (id = 0; id < DMX_DEV_COUNT; id++) {
@@ -2830,13 +2857,21 @@ void dmx_reset_dmx_hw_ex_unlock(struct aml_dvb *dvb, struct aml_dmx *dmx,
 		dvb->dmx_watchdog_disable[dmx->id] = 1;
 	}
 #endif
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+pr_dbg("RESET_DEMUX0\n");
+/****************************************************************************************FIXME
 	WRITE_MPEG_REG(RESET3_REGISTER,
 		       (dmx->id) ? ((dmx->id ==
 				     1) ? RESET_DEMUX1 : RESET_DEMUX2) :
 		       RESET_DEMUX0);
-	WRITE_MPEG_REG(RESET3_REGISTER, RESET_DES);
-
+*********************************************************************************************/
+#else
+	WRITE_MPEG_REG(RESET3_REGISTER,
+		       (dmx->id) ? ((dmx->id ==
+				     1) ? RESET_DEMUX1 : RESET_DEMUX2) :
+		       RESET_DEMUX0);
+#endif
+//	WRITE_MPEG_REG(RESET3_REGISTER, RESET_DES);
 	{
 		int times;
 
@@ -3027,7 +3062,7 @@ static int alloc_subtitle_pes_buffer(struct aml_dmx *dmx)
 		WRITE_MPEG_REG(PARSER_SUB_RP, start_ptr);
 		goto exit;
 	}
-	sbuff = get_stream_buffer(BUF_TYPE_SUBTITLE);
+//	sbuff = get_stream_buffer(BUF_TYPE_SUBTITLE);
 	if (sbuff) {
 		if (sbuff->flag & BUF_FLAG_IOMEM)
 			phy_addr = sbuff->buf_start;
@@ -3512,7 +3547,6 @@ static int dmx_add_feed(struct aml_dmx *dmx, struct dvb_demux_feed *feed)
 		if (sf_ret) {	/*not sf feed. */
 			id = dmx_alloc_chan(dmx, feed->type,
 				feed->pes_type, feed->pid);
-//			pr_dbg("alloc chan=%d\n", id);
 			if (id < 0) {
 				pr_dbg("alloc chan error, ret=%d\n", id);
 				return id;
@@ -3666,9 +3700,14 @@ int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo)
 #endif
 */
 	/*afifo_reset(0);*/
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+pr_dbg("WRITE_MPEG_REG(RESET6_REGISTER, (1<<11)|(1<<12));");
+/***********************************************************************************************FIXME
 	WRITE_MPEG_REG(RESET6_REGISTER, (1<<11)|(1<<12));
-
+****************************************************************************************************/
+#else
+	WRITE_MPEG_REG(RESET6_REGISTER, (1<<11)|(1<<12));
+#endif
 	ret = async_fifo_init(afifo, 1, len, buf);
 /*
 	spin_unlock_irqrestore(&dvb->slock, flags);
@@ -4150,7 +4189,7 @@ int _set_tsfile_clkdiv(struct aml_dvb *dvb, int clkdiv)
 	return 0;
 }
 
-static ssize_t stb_set_tsfile_clkdiv(struct class *class,
+static ssize_t stb_tsfile_clkdiv_store(struct class *class,
 				     struct class_attribute *attr,
 				     const char *buf, size_t size)
 {
@@ -4161,7 +4200,7 @@ static ssize_t stb_set_tsfile_clkdiv(struct class *class,
 	return size;
 }
 
-static ssize_t stb_get_tsfile_clkdiv(struct class *class,
+static ssize_t stb_tsfile_clkdiv_show(struct class *class,
 				     struct class_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -4228,7 +4267,7 @@ static ssize_t dmx_timeout_store(struct class *class,
 
 
 #define DEMUX_SCAMBLE_FUNC_DECL(i)  \
-static ssize_t dmx_reg_value_show_demux##i##_scramble(struct class *class,  \
+static ssize_t dmx_reg_value_demux##i##_scramble_show(struct class *class,  \
 struct class_attribute *attr, char *buf)\
 {\
 	int data = 0;\
@@ -4247,46 +4286,67 @@ struct class_attribute *attr, char *buf)\
 #if DMX_DEV_COUNT > 0
 DEMUX_SCAMBLE_FUNC_DECL(0)
 #endif
-#if DMX_DEV_COUNT > 1
-DEMUX_SCAMBLE_FUNC_DECL(1)
-#endif
-#if DMX_DEV_COUNT > 2
-DEMUX_SCAMBLE_FUNC_DECL(2)
-#endif
 
-static ssize_t dmx_reg_addr_show_source(struct class *class,
+static ssize_t dmx_reg_addr_source_show(struct class *class,
 					struct class_attribute *attr,
 					char *buf);
-static ssize_t dmx_reg_addr_store_source(struct class *class,
+static ssize_t dmx_reg_addr_source_store(struct class *class,
 					 struct class_attribute *attr,
 					 const char *buf, size_t size);
-static ssize_t dmx_id_show_source(struct class *class,
+static ssize_t dmx_id_source_show(struct class *class,
 				  struct class_attribute *attr, char *buf);
-static ssize_t dmx_id_store_source(struct class *class,
+static ssize_t dmx_id_source_store(struct class *class,
 				   struct class_attribute *attr,
 				   const char *buf, size_t size);
-static ssize_t dmx_reg_value_show_source(struct class *class,
+static ssize_t dmx_reg_value_source_show(struct class *class,
 					 struct class_attribute *attr,
 					 char *buf);
-static ssize_t dmx_reg_value_store_source(struct class *class,
+static ssize_t dmx_reg_value_source_store(struct class *class,
 					  struct class_attribute *attr,
 					  const char *buf, size_t size);
 
 static int reg_addr;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+static CLASS_ATTR_RW(dmx_id_source);
+static CLASS_ATTR_RW(dmx_reg_addr_source);
+static CLASS_ATTR_RW(dmx_reg_value_source);
+static CLASS_ATTR_RW(stb_tsfile_clkdiv);
+static CLASS_ATTR_RO(dmx_reg_value_demux0_scramble);
+static CLASS_ATTR_RW(dmx_smallsec);
+static CLASS_ATTR_RW(dmx_timeout);
+
+static struct attribute *aml_class_attrs[] = {
+	&class_attr_dmx_id_source.attr,
+	&class_attr_dmx_reg_addr_source.attr,
+	&class_attr_dmx_reg_value_source.attr,
+	&class_attr_stb_tsfile_clkdiv.attr,
+	&class_attr_dmx_reg_value_demux0_scramble.attr,
+	&class_attr_dmx_smallsec.attr,
+	&class_attr_dmx_timeout.attr,
+	NULL
+};
+
+ATTRIBUTE_GROUPS(aml_class);
+
+static struct class aml_dmx_class = {
+	.name = "dmx",
+	.class_groups = aml_class_groups,
+};
+#else
 static struct class_attribute aml_dmx_class_attrs[] = {
-	__ATTR(dmx_id, S_IRUGO | S_IWUSR, dmx_id_show_source,
-	       dmx_id_store_source),
-	__ATTR(register_addr, S_IRUGO | S_IWUSR, dmx_reg_addr_show_source,
-	       dmx_reg_addr_store_source),
-	__ATTR(register_value, S_IRUGO | S_IWUSR, dmx_reg_value_show_source,
-	       dmx_reg_value_store_source),
-	__ATTR(tsfile_clkdiv, S_IRUGO | S_IWUSR, stb_get_tsfile_clkdiv,
-	       stb_set_tsfile_clkdiv),
+	__ATTR(dmx_id, S_IRUGO | S_IWUSR, dmx_id_source_show,
+	       dmx_id_source_store),
+	__ATTR(register_addr, S_IRUGO | S_IWUSR, dmx_reg_addr_source_show,
+	       dmx_reg_addr_source_store),
+	__ATTR(register_value, S_IRUGO | S_IWUSR, dmx_reg_value_source_show,
+	       dmx_reg_value_source_store),
+	__ATTR(tsfile_clkdiv, S_IRUGO | S_IWUSR, stb_tsfile_clkdiv_show,
+	       stb_tsfile_clkdiv_store),
 
 #define DEMUX_SCAMBLE_ATTR_DECL(i)\
 		__ATTR(demux##i##_scramble,  S_IRUGO | S_IWUSR, \
-		dmx_reg_value_show_demux##i##_scramble, NULL)
+		dmx_reg_value_demux##i##_scramble_show, NULL)
 #if DMX_DEV_COUNT > 0
 	DEMUX_SCAMBLE_ATTR_DECL(0),
 #endif
@@ -4312,7 +4372,9 @@ static struct class aml_dmx_class = {
 	.class_attrs = aml_dmx_class_attrs,
 };
 
-static ssize_t dmx_id_show_source(struct class *class,
+
+#endif
+static ssize_t dmx_id_source_show(struct class *class,
 				  struct class_attribute *attr, char *buf)
 {
 	int ret;
@@ -4320,7 +4382,7 @@ static ssize_t dmx_id_show_source(struct class *class,
 	return ret;
 }
 
-static ssize_t dmx_id_store_source(struct class *class,
+static ssize_t dmx_id_source_store(struct class *class,
 				   struct class_attribute *attr,
 				   const char *buf, size_t size)
 {
@@ -4338,7 +4400,7 @@ static ssize_t dmx_id_store_source(struct class *class,
 	return size;
 }
 
-static ssize_t dmx_reg_addr_show_source(struct class *class,
+static ssize_t dmx_reg_addr_source_show(struct class *class,
 					struct class_attribute *attr,
 					 char *buf)
 {
@@ -4347,7 +4409,7 @@ static ssize_t dmx_reg_addr_show_source(struct class *class,
 	return ret;
 }
 
-static ssize_t dmx_reg_addr_store_source(struct class *class,
+static ssize_t dmx_reg_addr_source_store(struct class *class,
 					 struct class_attribute *attr,
 					 const char *buf, size_t size)
 {
@@ -4360,7 +4422,7 @@ static ssize_t dmx_reg_addr_store_source(struct class *class,
 	return size;
 }
 
-static ssize_t dmx_reg_value_show_source(struct class *class,
+static ssize_t dmx_reg_value_source_show(struct class *class,
 					 struct class_attribute *attr,
 					 char *buf)
 {
@@ -4370,7 +4432,7 @@ static ssize_t dmx_reg_value_show_source(struct class *class,
 	return ret;
 }
 
-static ssize_t dmx_reg_value_store_source(struct class *class,
+static ssize_t dmx_reg_value_source_store(struct class *class,
 					  struct class_attribute *attr,
 					  const char *buf, size_t size)
 {
@@ -4487,7 +4549,6 @@ void aml_dmx_after_retune(enum aml_ts_source_t src, struct dvb_frontend *fe)
 
 	spin_unlock_irqrestore(&dvb->slock, flags);
 }
-//EXPORT_SYMBOL(aml_dmx_after_retune);
 
 void aml_dmx_start_error_check(enum aml_ts_source_t src,
 			       struct dvb_frontend *fe)
@@ -4507,7 +4568,6 @@ void aml_dmx_start_error_check(enum aml_ts_source_t src,
 
 	spin_unlock_irqrestore(&dvb->slock, flags);
 }
-//EXPORT_SYMBOL(aml_dmx_start_error_check);
 
 int aml_dmx_stop_error_check(enum aml_ts_source_t src, struct dvb_frontend *fe)
 {
@@ -4529,4 +4589,3 @@ int aml_dmx_stop_error_check(enum aml_ts_source_t src, struct dvb_frontend *fe)
 
 	return ret;
 }
-//EXPORT_SYMBOL(aml_dmx_stop_error_check);

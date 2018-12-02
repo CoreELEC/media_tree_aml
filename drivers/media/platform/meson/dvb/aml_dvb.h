@@ -1,5 +1,5 @@
-#ifndef _WETEK_DVB_H_
-#define _WETEK_DVB_H_
+#ifndef _AML_DVB_H_
+#define _AML_DVB_H_
 
 #include <linux/interrupt.h>
 #include <linux/socket.h>
@@ -27,7 +27,6 @@
 #include "media/demux.h"
 #include "media/dvb_demux.h"
 #include "media/dmxdev.h"
-#include "dvb_filter.h"
 #include "media/dvb_net.h"
 #include "media/dvb_ringbuffer.h"
 #include "media/dvb_frontend.h"
@@ -38,8 +37,8 @@
 #define TS_IN_COUNT       3
 #define S2P_COUNT         2
 
-#define DMX_DEV_COUNT     3
-#define FE_DEV_COUNT      2
+#define DMX_DEV_COUNT     1
+#define FE_DEV_COUNT      1
 #define CHANNEL_COUNT     31
 #define FILTER_COUNT      31
 #define FILTER_LEN        15
@@ -48,7 +47,7 @@
 #define SEC_BUF_GRP_COUNT 4
 #define SEC_BUF_BUSY_SIZE 4
 #define SEC_BUF_COUNT     (SEC_BUF_GRP_COUNT*8)
-#define ASYNCFIFO_COUNT   2
+#define ASYNCFIFO_COUNT   1
 
 typedef enum dmx_source {
 	DMX_SOURCE_FRONT0 = 0,
@@ -64,14 +63,14 @@ typedef enum dmx_source {
 	DMX_SOURCE_FRONT2_OFFSET
 } dmx_source_t;
 
-enum wetek_dmx_id_t {
+enum aml_dmx_id_t {
 	AM_DMX_0 = 0,
 	AM_DMX_1,
 	AM_DMX_2,
 	AM_DMX_MAX,
 };
 
-enum wetek_ts_source_t {
+enum aml_ts_source_t {
 	AM_TS_SRC_TS0,
 	AM_TS_SRC_TS1,
 	AM_TS_SRC_TS2,
@@ -84,12 +83,12 @@ enum wetek_ts_source_t {
 	AM_TS_SRC_DMX2
 };
 
-struct wetek_sec_buf {
+struct aml_sec_buf {
 	unsigned long        addr;
 	int                  len;
 };
 
-struct wetek_channel {
+struct aml_channel {
 	int                  type;
 	enum dmx_ts_pes	pes_type;
 	int                  pid;
@@ -99,7 +98,7 @@ struct wetek_channel {
 	struct dvb_demux_feed     *dvr_feed;
 };
 
-struct wetek_filter {
+struct aml_filter {
 	int                  chan_id;
 	int                  used;
 	struct dmx_section_filter *filter;
@@ -109,18 +108,18 @@ struct wetek_filter {
 	u8                   neq;
 };
 
-struct wetek_dsc {
+struct aml_dsc {
 	int                  pid;
 	u8                   even[8];
 	u8                   odd[8];
 	int                  used;
 	int                  set;
 	int                  id;
-	struct wetek_dvb      *dvb;
+	struct aml_dvb      *dvb;
 };
 
-struct wetek_smallsec {
-	struct wetek_dmx *dmx;
+struct aml_smallsec {
+	struct aml_dmx *dmx;
 
 	int	enable;
 	int	bufsize;
@@ -129,8 +128,8 @@ struct wetek_smallsec {
 	long	buf_map;
 };
 
-struct wetek_dmxtimeout {
-	struct wetek_dmx *dmx;
+struct aml_dmxtimeout {
+	struct aml_dmx *dmx;
 
 	int	enable;
 
@@ -143,13 +142,13 @@ struct wetek_dmxtimeout {
 	int     trigger;
 };
 
-struct wetek_dmx {
+struct aml_dmx {
 	struct dvb_demux     demux;
 	struct dmxdev        dmxdev;
 	int                  id;
 	int                  feed_count;
 	int                  chan_count;
-	enum wetek_ts_source_t      source;
+	enum aml_ts_source_t      source;
 	int                  init;
 	int                  record;
 	struct dmx_frontend  hw_fe[DMX_DEV_COUNT];
@@ -162,15 +161,15 @@ struct wetek_dmx {
 	unsigned long        sec_pages;
 	unsigned long        sec_pages_map;
 	int                  sec_total_len;
-	struct wetek_sec_buf   sec_buf[SEC_BUF_COUNT];
+	struct aml_sec_buf   sec_buf[SEC_BUF_COUNT];
 	unsigned long        pes_pages;
 	unsigned long        pes_pages_map;
 	int                  pes_buf_len;
 	unsigned long        sub_pages;
 	unsigned long        sub_pages_map;
 	int                  sub_buf_len;
-	struct wetek_channel   channel[CHANNEL_COUNT];
-	struct wetek_filter    filter[FILTER_COUNT];
+	struct aml_channel   channel[CHANNEL_COUNT];
+	struct aml_filter    filter[FILTER_COUNT];
 	irq_handler_t        irq_handler;
 	void                *irq_data;
 	int                  aud_chan;
@@ -186,17 +185,17 @@ struct wetek_dmx {
 	int                  dump_ts_select;
 	int                  sec_buf_watchdog_count[SEC_BUF_COUNT];
 
-	struct wetek_smallsec  smallsec;
-	struct wetek_dmxtimeout timeout;
+	struct aml_smallsec  smallsec;
+	struct aml_dmxtimeout timeout;
 
 	int                  demux_filter_user;
 };
 
-struct wetek_asyncfifo {
+struct aml_asyncfifo {
 	int	id;
 	int	init;
 	int	asyncfifo_irq;
-	enum wetek_dmx_id_t	source;
+	enum aml_dmx_id_t	source;
 	unsigned long	pages;
 	unsigned long   pages_map;
 	int	buf_len;
@@ -204,7 +203,7 @@ struct wetek_asyncfifo {
 	int buf_read;
 	int flush_size;
 	struct tasklet_struct     asyncfifo_tasklet;
-	struct wetek_dvb *dvb;
+	struct aml_dvb *dvb;
 };
 
 enum{
@@ -213,21 +212,21 @@ enum{
 	AM_TS_SERIAL
 };
 
-struct wetek_ts_input {
+struct aml_ts_input {
 	int                  mode;
 	struct pinctrl      *pinctrl;
 	int                  control;
 	int                  s2p_id;
 };
 
-struct wetek_s2p {
+struct aml_s2p {
 	int    invert;
 };
 
-struct wetek_swfilter {
+struct aml_swfilter {
 	int    user;
-	struct wetek_dmx *dmx;
-	struct wetek_asyncfifo *afifo;
+	struct aml_dmx *dmx;
+	struct aml_asyncfifo *afifo;
 
 	struct dvb_ringbuffer rbuf;
 #define SF_BUFFER_SIZE (10*188*1024)
@@ -236,89 +235,93 @@ struct wetek_swfilter {
 	int    track_dmx;
 };
 
-struct wetek_dvb {
+struct aml_dvb {
 	struct dvb_device    dvb_dev;
-	struct wetek_ts_input  ts[TS_IN_COUNT];
-	struct wetek_s2p       s2p[S2P_COUNT];
-	struct wetek_dmx       dmx[DMX_DEV_COUNT];
-	struct wetek_dsc       dsc[DSC_COUNT];
-	struct wetek_asyncfifo asyncfifo[ASYNCFIFO_COUNT];
+	struct aml_ts_input  ts[TS_IN_COUNT];
+	struct aml_s2p       s2p[S2P_COUNT];
+	struct aml_dmx       dmx[DMX_DEV_COUNT];
+	struct aml_dsc       dsc[DSC_COUNT];
+	struct aml_asyncfifo asyncfifo[ASYNCFIFO_COUNT];
 	struct dvb_device   *dsc_dev;
 	struct dvb_adapter   dvb_adapter;
 	struct device       *dev;
 	struct platform_device *pdev;
-	enum wetek_ts_source_t      stb_source;
-	enum wetek_ts_source_t      dsc_source;
-	enum wetek_ts_source_t      tso_source;
+	enum aml_ts_source_t      stb_source;
+	enum aml_ts_source_t      dsc_source;
+	enum aml_ts_source_t      tso_source;
 	int                  dmx_init;
 	int                  reset_flag;
 	spinlock_t           slock;
 	struct timer_list    watchdog_timer;
 	int                  dmx_watchdog_disable[DMX_DEV_COUNT];
-	struct wetek_swfilter  swfilter;
+	struct aml_swfilter  swfilter;
 	int		     ts_out_invert;
+	void __iomem 	     *demux_base;
+	void __iomem 	     *afifo_base;
+	int			demux_irq;
+	int			afifo_irq;
 };
 
 
 /*AMLogic demux interface*/
-extern int wetek_dmx_hw_init(struct wetek_dmx *dmx);
-extern int wetek_dmx_hw_deinit(struct wetek_dmx *dmx);
-extern int wetek_dmx_hw_start_feed(struct dvb_demux_feed *dvbdmxfeed);
-extern int wetek_dmx_hw_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
-extern int wetek_dmx_hw_set_source(struct dmx_demux *demux, dmx_source_t src);
-extern int wetek_stb_hw_set_source(struct wetek_dvb *dvb, dmx_source_t src);
-extern int wetek_dsc_hw_set_source(struct wetek_dvb *dvb, dmx_source_t src);
-extern int wetek_tso_hw_set_source(struct wetek_dvb *dvb, dmx_source_t src);
+extern int aml_dmx_hw_init(struct aml_dmx *dmx);
+extern int aml_dmx_hw_deinit(struct aml_dmx *dmx);
+extern int aml_dmx_hw_start_feed(struct dvb_demux_feed *dvbdmxfeed);
+extern int aml_dmx_hw_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
+extern int aml_dmx_hw_set_source(struct dmx_demux *demux, dmx_source_t src);
+extern int aml_stb_hw_set_source(struct aml_dvb *dvb, dmx_source_t src);
+extern int aml_dsc_hw_set_source(struct aml_dvb *dvb, dmx_source_t src);
+extern int aml_tso_hw_set_source(struct aml_dvb *dvb, dmx_source_t src);
 
-extern int wetek_dmx_set_skipbyte(struct wetek_dvb *dvb, int skipbyte);
-extern int wetek_dmx_set_demux(struct wetek_dvb *dvb, int id);
-extern int wetek_dmx_hw_set_dump_ts_select
+extern int aml_dmx_set_skipbyte(struct aml_dvb *dvb, int skipbyte);
+extern int aml_dmx_set_demux(struct aml_dvb *dvb, int id);
+extern int aml_dmx_hw_set_dump_ts_select
 		(struct dmx_demux *demux, int dump_ts_select);
 
-extern int  dmx_alloc_chan(struct wetek_dmx *dmx, int type,
+extern int  dmx_alloc_chan(struct aml_dmx *dmx, int type,
 				int pes_type, int pid);
-extern void dmx_free_chan(struct wetek_dmx *dmx, int cid);
+extern void dmx_free_chan(struct aml_dmx *dmx, int cid);
 
-extern int dmx_get_ts_serial(enum wetek_ts_source_t src);
+extern int dmx_get_ts_serial(enum aml_ts_source_t src);
 
 
 /*AMLogic dsc interface*/
-extern int dsc_set_pid(struct wetek_dsc *dsc, int pid);
-extern int dsc_set_key(struct wetek_dsc *dsc, int type, u8 *key);
-extern int dsc_release(struct wetek_dsc *dsc);
+extern int dsc_set_pid(struct aml_dsc *dsc, int pid);
+extern int dsc_set_key(struct aml_dsc *dsc, int type, u8 *key);
+extern int dsc_release(struct aml_dsc *dsc);
 
 /*AMLogic ASYNC FIFO interface*/
-extern int wetek_asyncfifo_hw_init(struct wetek_asyncfifo *afifo);
-extern int wetek_asyncfifo_hw_deinit(struct wetek_asyncfifo *afifo);
-extern int wetek_asyncfifo_hw_set_source(struct wetek_asyncfifo *afifo,
-					enum wetek_dmx_id_t src);
-extern int wetek_asyncfifo_hw_reset(struct wetek_asyncfifo *afifo);
+extern int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo);
+extern int aml_asyncfifo_hw_deinit(struct aml_asyncfifo *afifo);
+extern int aml_asyncfifo_hw_set_source(struct aml_asyncfifo *afifo,
+					enum aml_dmx_id_t src);
+extern int aml_asyncfifo_hw_reset(struct aml_asyncfifo *afifo);
 
 /*Get the Audio & Video PTS*/
-extern u32 wetek_dmx_get_video_pts(struct wetek_dvb *dvb);
-extern u32 wetek_dmx_get_audio_pts(struct wetek_dvb *dvb);
-extern u32 wetek_dmx_get_first_video_pts(struct wetek_dvb *dvb);
-extern u32 wetek_dmx_get_first_audio_pts(struct wetek_dvb *dvb);
+extern u32 aml_dmx_get_video_pts(struct aml_dvb *dvb);
+extern u32 aml_dmx_get_audio_pts(struct aml_dvb *dvb);
+extern u32 aml_dmx_get_first_video_pts(struct aml_dvb *dvb);
+extern u32 aml_dmx_get_first_audio_pts(struct aml_dvb *dvb);
 
 /*Get the DVB device*/
-extern struct wetek_dvb *wetek_get_dvb_device(void);
+extern struct aml_dvb *aml_get_dvb_device(void);
 
 /*Demod interface*/
-extern void wetek_dmx_register_frontend(enum wetek_ts_source_t src,
+extern void aml_dmx_register_frontend(enum aml_ts_source_t src,
 					struct dvb_frontend *fe);
-extern void wetek_dmx_before_retune(enum wetek_ts_source_t src,
+extern void aml_dmx_before_retune(enum aml_ts_source_t src,
 					struct dvb_frontend *fe);
-extern void wetek_dmx_after_retune(enum wetek_ts_source_t src,
+extern void aml_dmx_after_retune(enum aml_ts_source_t src,
 					struct dvb_frontend *fe);
-extern void wetek_dmx_start_error_check(enum wetek_ts_source_t src,
+extern void aml_dmx_start_error_check(enum aml_ts_source_t src,
 					struct dvb_frontend *fe);
-extern int  wetek_dmx_stop_error_check(enum wetek_ts_source_t src,
+extern int  aml_dmx_stop_error_check(enum aml_ts_source_t src,
 					struct dvb_frontend *fe);
-extern int wetek_regist_dmx_class(void);
-extern int wetek_unregist_dmx_class(void);
+extern int aml_regist_dmx_class(void);
+extern int aml_unregist_dmx_class(void);
 extern void dvb_frontend_retune(struct dvb_frontend *fe);
 
-struct devio_wetek_platform_data {
+struct devio_aml_platform_data {
 	int (*io_setup)(void *);
 	int (*io_cleanup)(void *);
 	int (*io_power)(void *, int enable);
@@ -326,18 +329,18 @@ struct devio_wetek_platform_data {
 };
 
 /*Reset the demux device*/
-void dmx_reset_hw(struct wetek_dvb *dvb);
-void dmx_reset_hw_ex(struct wetek_dvb *dvb, int reset_irq);
+void dmx_reset_hw(struct aml_dvb *dvb);
+void dmx_reset_hw_ex(struct aml_dvb *dvb, int reset_irq);
 
 /*Reset the individual demux*/
-void dmx_reset_dmx_hw(struct wetek_dvb *dvb, int id);
-void dmx_reset_dmx_id_hw_ex(struct wetek_dvb *dvb, int id, int reset_irq);
-void dmx_reset_dmx_id_hw_ex_unlock(struct wetek_dvb *dvb, int id, int reset_irq);
-void dmx_reset_dmx_hw_ex(struct wetek_dvb *dvb,
-				struct wetek_dmx *dmx,
+void dmx_reset_dmx_hw(struct aml_dvb *dvb, int id);
+void dmx_reset_dmx_id_hw_ex(struct aml_dvb *dvb, int id, int reset_irq);
+void dmx_reset_dmx_id_hw_ex_unlock(struct aml_dvb *dvb, int id, int reset_irq);
+void dmx_reset_dmx_hw_ex(struct aml_dvb *dvb,
+				struct aml_dmx *dmx,
 				int reset_irq);
-void dmx_reset_dmx_hw_ex_unlock(struct wetek_dvb *dvb,
-				struct wetek_dmx *dmx,
+void dmx_reset_dmx_hw_ex_unlock(struct aml_dvb *dvb,
+				struct aml_dmx *dmx,
 				int reset_irq);
 
 #endif

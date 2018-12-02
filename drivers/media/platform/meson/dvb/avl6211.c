@@ -1818,7 +1818,7 @@ static int avl6211_init(struct dvb_frontend* fe)
 	ret = avl6211_get_demod_status(fe);
 	if (ret)
 		goto err;
-	
+
 	
 	ret = avl6211_i2c_write32(state, 0x263E, 50000);
 	if (ret)
@@ -1961,7 +1961,7 @@ struct dvb_frontend* avl6211_attach(struct i2c_adapter* i2c,
 		goto err2;
 
 	dev_info(&i2c->dev, "AVL6211+AV2011 DVB-S/S2 successfully attached\n");	
-	
+
 	memcpy(&state->frontend.ops, &avl6211_ops, sizeof(struct dvb_frontend_ops));
 	state->frontend.demodulator_priv = state;
 

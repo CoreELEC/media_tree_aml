@@ -18,10 +18,10 @@
 #ifndef _DVB_REG_H_
 #define _DVB_REG_H_
 
-#include <linux/amlogic/iomap.h>
-
-#include "wetek_stb_define.h"
-#include "wetek_stb_regs_define.h"
+extern int aml_read_cbus(unsigned int reg);
+extern void aml_write_cbus(unsigned int reg, unsigned int val);
+extern int aml_read_vcbus(unsigned int reg);
+extern void aml_write_vcbus(unsigned int reg, unsigned int val);
 
 #define WRITE_MPEG_REG(_r, _v)   aml_write_cbus(_r, _v)
 #define READ_MPEG_REG(_r)        aml_read_cbus(_r)
