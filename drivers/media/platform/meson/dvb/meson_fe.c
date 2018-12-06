@@ -101,9 +101,9 @@ static struct mxl603_config mxl603cfg_atsc = {
 };
 static struct mxl603_config mxl608cfg = {
 		.xtal_freq_hz = MXL603_XTAL_16MHz,
-		.if_freq_hz = MXL603_IF_4_1MHz,
+		.if_freq_hz = MXL603_IF_5MHz,
 		.agc_type = MXL603_AGC_SELF,
-		.xtal_cap = 12,
+		.xtal_cap = 25,
 		.gain_level = 11,
 		.if_out_gain_level = 11,
 		.agc_set_point = 66,
@@ -348,6 +348,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 					dvb_frontend_detach(meson_dvb.fe);
 					goto no_demod;
 				}
+				return 0;
 			}		
 			dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");
 			meson_dvb.fe = avl6862_attach(&avl6762cfg, meson_dvb.i2c);
@@ -434,7 +435,7 @@ static int meson_dvb_remove(struct platform_device *pdev)
 	devm_pinctrl_put(meson_dvb.ts[0].pinctrl);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 	clk_disable_unprepare(dvb_uparsertop_clk_ctl);
-	c lk_disable_unprepare(dvb_ahbarb0_clk_ctl);
+	clk_disable_unprepare(dvb_ahbarb0_clk_ctl);
 	clk_disable_unprepare(dvb_afifo_clk_ctl);
 	clk_disable_unprepare(dvb_demux_clk_ctl);
 #else
