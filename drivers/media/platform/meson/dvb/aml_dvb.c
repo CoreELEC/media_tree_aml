@@ -77,8 +77,10 @@ static void aml_dvb_dmx_release(struct aml_dvb *advb, struct aml_dmx *dmx)
 static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 {
 	int i, ret;
+/*
 	struct resource *res;
 	char buf[32];
+
 	switch(id){
 		case 0:
 			dmx->dmx_irq = INT_DEMUX;
@@ -97,7 +99,7 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 	if (res) {
 		dmx->dmx_irq = res->start;
 	}
-
+*/
 	dmx->source  = 0;
 	dmx->dump_ts_select = 0;
 	dmx->dvr_irq = -1;
@@ -139,7 +141,7 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 		goto error_add_mem_fe;
 	}
 
-	if ((ret = dmx->demux.dmx.connect_frontend(&dmx->demux.dmx, &dmx->hw_fe[1])) < 0) {
+	if ((ret = dmx->demux.dmx.connect_frontend(&dmx->demux.dmx, &dmx->hw_fe[id])) < 0) {
 		pr_error("connect frontend failed: error %d",ret);
 		goto error_connect_fe;
 	}
@@ -159,8 +161,8 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 	dmx->timeout.match      = 1;
 	dmx->timeout.trigger    = 0;
 
-	if ((ret = aml_dmx_hw_init(dmx)) <0) {
-		pr_error("demux hw init error %d", ret);
+	if ((ret = aml_dmx_hw_init(dmx, id)) <0) {
+		pr_error("demux%d hw init error %d", id, ret);
 		dmx->id = -1;
 		goto error_dmx_hw_init;
 	}
@@ -191,6 +193,7 @@ struct aml_dvb* aml_get_dvb_device(void)
 
 static int aml_dvb_asyncfifo_init(struct aml_dvb *advb, struct aml_asyncfifo *asyncfifo, int id)
 {
+/*
 	struct resource *res;
 	char buf[32];
 
@@ -204,12 +207,13 @@ static int aml_dvb_asyncfifo_init(struct aml_dvb *advb, struct aml_asyncfifo *as
 	if (res) {
 		asyncfifo->asyncfifo_irq = res->start;
 	}
+*/
 	asyncfifo->dvb = advb;
 	asyncfifo->id = id;
 	asyncfifo->init = 0;
 	asyncfifo->flush_size = 256*1024;
 
-	return aml_asyncfifo_hw_init(asyncfifo);
+	return aml_asyncfifo_hw_init(asyncfifo, id);
 }
 
 
@@ -630,7 +634,7 @@ static ssize_t asyncfifo##i##_flush_size_store(struct class *class,  \
 		fsize = value;\
 	if (fsize != afifo->flush_size) {\
 		afifo->flush_size = fsize;\
-	aml_asyncfifo_hw_reset(&aml_dvb_device.asyncfifo[i]);\
+	aml_asyncfifo_hw_reset(&aml_dvb_device.asyncfifo[i], i);\
 	} \
 	return size;\
 }
@@ -957,10 +961,6 @@ static struct class_attribute aml_stb_class_attrs[] = {
 	ASYNCFIFO_SOURCE_ATTR_DECL(0),
 	ASYNCFIFO_FLUSHSIZE_ATTR_DECL(0),
 #endif
-#if ASYNCFIFO_COUNT>1
-	ASYNCFIFO_SOURCE_ATTR_DECL(1),
-	ASYNCFIFO_FLUSHSIZE_ATTR_DECL(1),
-#endif
 	__ATTR(demux_reset,  S_IRUGO | S_IWUSR, NULL, demux_reset_store),
 	__ATTR(video_pts,  S_IRUGO | S_IWUSR | S_IWGRP, demux_video_pts_show, NULL),
 	__ATTR(audio_pts,  S_IRUGO | S_IWUSR | S_IWGRP, demux_audio_pts_show, NULL),
@@ -997,9 +997,10 @@ int __init aml_dvb_init(void)
 
 	advb->demux_base = p.demux_base;
 	advb->afifo_base = p.afifo_base;
-	advb->demux_irq = p.demux_irq;
-	advb->afifo_irq = p.afifo_irq;
-
+	for (i = 0; i < ASYNCFIFO_COUNT; i++) {
+		advb->demux_irq[i] = p.demux_irq[i];
+		advb->afifo_irq[i] = p.afifo_irq[i];
+	}
 	advb->dev = &pdev->dev;
 	advb->pdev = pdev;
 	advb->stb_source = -1;
@@ -1033,9 +1034,11 @@ int __init aml_dvb_init(void)
 		ret = aml_dvb_asyncfifo_init(advb, &advb->asyncfifo[i], i);
 		if (ret < 0)
 			goto error;
-
+		if (i)
+			aml_asyncfifo_hw_set_source(&advb->asyncfifo[i], AM_DMX_1);
+		else
+			aml_asyncfifo_hw_set_source(&advb->asyncfifo[0], AM_DMX_0);
 	}
-	aml_asyncfifo_hw_set_source(&advb->asyncfifo[0], AM_DMX_0);
 
 	aml_regist_dmx_class();
 
@@ -1043,24 +1046,22 @@ int __init aml_dvb_init(void)
 		pr_error("register class error\n");
 		goto error;
 	}
-	if (!p.fe){
-		pr_err("No frontend initialized!!!\n");
-		ret = -ENOMEM;
-		goto error;
+	for (i = 0; i < ASYNCFIFO_COUNT; i++) {
+		if (!p.fe[i])
+			continue;
+
+		if (dvb_register_frontend(&advb->dvb_adapter, p.fe[i])) {
+			pr_err("Frontend registration failed!!!\n");
+			ops = &p.fe[i]->ops;
+			if (ops->release != NULL)
+				ops->release(p.fe[i]);
+			p.fe[i] = NULL;
+			goto error;
+		}
+
+		platform_set_drvdata(pdev, p.fe);
 	}
-
-	if (dvb_register_frontend(&advb->dvb_adapter, p.fe)) {
-		pr_err("Frontend registration failed!!!\n");
-		ops = &p.fe->ops;
-		if (ops->release != NULL)
-			ops->release(p.fe);
-		p.fe = NULL;
-		return -ENOMEM;
-	}
-
-	platform_set_drvdata(pdev, p.fe);
-
-	pr_info("Meson DVB frontend registered successfully.\n");
+	pr_info("Meson DVB frontend(s) registered successfully.\n");
 	return ret;
 error:
 	for (i = 0; i < ASYNCFIFO_COUNT; i++) {

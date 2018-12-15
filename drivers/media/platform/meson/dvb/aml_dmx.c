@@ -1198,12 +1198,12 @@ static void stb_enable(struct aml_dvb *dvb)
 	case AM_TS_SRC_DMX0:
 		src = dvb->dmx[0].source;
 		break;
-//	case AM_TS_SRC_DMX1:
-//		src = dvb->dmx[1].source;
-//		break;
-//	case AM_TS_SRC_DMX2:
-//		src = dvb->dmx[2].source;
-//		break;
+	case AM_TS_SRC_DMX1:
+		src = dvb->dmx[1].source;
+		break;
+	case AM_TS_SRC_DMX2:
+		src = dvb->dmx[2].source;
+		break;
 	default:
 		src = dvb->stb_source;
 		break;
@@ -1248,12 +1248,12 @@ static void stb_enable(struct aml_dvb *dvb)
 	case AM_TS_SRC_DMX0:
 		tso_src = dvb->dmx[0].source;
 		break;
-//	case AM_TS_SRC_DMX1:
-//		tso_src = dvb->dmx[1].source;
-//		break;
-//	case AM_TS_SRC_DMX2:
-//		tso_src = dvb->dmx[2].source;
-//		break;
+	case AM_TS_SRC_DMX1:
+		tso_src = dvb->dmx[1].source;
+		break;
+	case AM_TS_SRC_DMX2:
+		tso_src = dvb->dmx[2].source;
+	break;
 	default:
 		tso_src = dvb->tso_source;
 		break;
@@ -1491,7 +1491,7 @@ static void asyncfifo_put_buffer(struct aml_asyncfifo *afifo)
 }
 
 int async_fifo_init(struct aml_asyncfifo *afifo, int initirq,
-			int buf_len, unsigned long buf)
+			int buf_len, unsigned long buf, int id)
 {
 	int ret = 0;
 
@@ -1504,26 +1504,14 @@ int async_fifo_init(struct aml_asyncfifo *afifo, int initirq,
 	afifo->buf_read = 0;
 	afifo->buf_len = 0;
 
-	if (afifo->asyncfifo_irq == -1) {
-		pr_error("no irq for ASYNC_FIFO%d\n", afifo->id);
-		/*Do not return error*/
-		return -1;
-	}
-
 	tasklet_init(&afifo->asyncfifo_tasklet,
 			dvr_irq_bh_handler, (unsigned long)afifo);
 	if (initirq) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 		struct aml_dvb *dvb = afifo->dvb;
-		ret = devm_request_irq(dvb->dev, dvb->afifo_irq, dvr_irq_handler, IRQF_SHARED, "afifoirq", afifo);
-		if (ret) {
-			pr_dbg("err: %d asyncfifo_irq:%d\n", ret, afifo->asyncfifo_irq);
-			return ret;
-		}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+		ret = devm_request_irq(dvb->dev, dvb->afifo_irq[id], dvr_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING, "afifo", afifo);
 #else
-		ret = request_irq(afifo->asyncfifo_irq,	dvr_irq_handler,
-				IRQF_SHARED|IRQF_TRIGGER_RISING,
-				"dvr irq", afifo);
+		ret = request_irq(dvb->afifo_irq[id], dvr_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING, "dvr irq", afifo);
 #endif
 	}
 	else
@@ -1705,7 +1693,7 @@ static int dmx_timeout_set(struct aml_dmxtimeout *dto, int enable,
 }
 
 /*Initalize the registers*/
-static int dmx_init(struct aml_dmx *dmx)
+static int dmx_init(struct aml_dmx *dmx, int id)
 {
 	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
 	int ret;
@@ -1718,15 +1706,9 @@ static int dmx_init(struct aml_dmx *dmx)
 	if (dmx->dmx_irq != -1) {
 		tasklet_init(&dmx->dmx_tasklet, dmx_irq_bh_handler, (unsigned long)dmx);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
-		ret = devm_request_irq(dvb->dev, dvb->demux_irq, dmx_irq_handler, IRQF_SHARED, "demuxirq", dmx);
-		if (ret) {
-			pr_dbg("err: %d request_irq:%d, %d\n", ret, dmx->dmx_irq, dvb->demux_irq);
-			return ret;
-		}
+		ret = devm_request_irq(dvb->dev, dvb->demux_irq[id], dmx_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING, "demuxirq", dmx);
 #else
-		ret = request_irq(dmx->dmx_irq,	dmx_irq_handler,
-				IRQF_SHARED|IRQF_TRIGGER_RISING,
-				"dmx irq", dmx);
+		ret = request_irq(dvb->demux_irq[id], dmx_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING, "dmx irq", dmx);
 #endif
 	}
 
@@ -3379,7 +3361,7 @@ static int dmx_remove_feed(struct aml_dmx *dmx, struct dvb_demux_feed *feed)
 	return 0;
 }
 
-int aml_dmx_hw_init(struct aml_dmx *dmx)
+int aml_dmx_hw_init(struct aml_dmx *dmx, int id)
 {
 	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
 	unsigned long flags;
@@ -3387,7 +3369,7 @@ int aml_dmx_hw_init(struct aml_dmx *dmx)
 
 	/*Demux initialize */
 	spin_lock_irqsave(&dvb->slock, flags);
-	ret = dmx_init(dmx);
+	ret = dmx_init(dmx, id);
 	spin_unlock_irqrestore(&dvb->slock, flags);
 
 	return ret;
@@ -3407,7 +3389,7 @@ int aml_dmx_hw_deinit(struct aml_dmx *dmx)
 
 /*extern void afifo_reset(int v);*/
 
-int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo)
+int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo, int id)
 {
 
 	int ret;
@@ -3425,7 +3407,7 @@ int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo)
 #else
 	WRITE_MPEG_REG(RESET6_REGISTER, (1<<11)|(1<<12));
 #endif
-	ret = async_fifo_init(afifo, 1, len, buf);
+	ret = async_fifo_init(afifo, 1, len, buf, id);
 
 	if (ret < 0)
 		asyncfifo_free_buffer(buf, len);
@@ -3448,7 +3430,7 @@ int aml_asyncfifo_hw_deinit(struct aml_asyncfifo *afifo)
 	return ret;
 }
 
-int aml_asyncfifo_hw_reset(struct aml_asyncfifo *afifo)
+int aml_asyncfifo_hw_reset(struct aml_asyncfifo *afifo, int id)
 {
 	struct aml_dvb *dvb = afifo->dvb;
 	unsigned long flags;
@@ -3464,7 +3446,7 @@ int aml_asyncfifo_hw_reset(struct aml_asyncfifo *afifo)
 		src = afifo->source;
 		async_fifo_deinit(afifo, 0);
 	}
-	ret = async_fifo_init(afifo, 0, len, buf);
+	ret = async_fifo_init(afifo, 0, len, buf, id);
 	/* restore the source */
 	if (src != -1)
 		afifo->source = src;

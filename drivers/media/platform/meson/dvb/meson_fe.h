@@ -12,6 +12,17 @@
 #include <linux/platform_device.h>
 #include "media/dvb_frontend.h"
 
+#define TOTAL_AML_INPUTS 	2
+#define BASE_IRQ 32
+#define AM_IRQ(reg)             (reg + BASE_IRQ)
+#define INT_DEMUX               AM_IRQ(23)
+#define INT_DEMUX_1             AM_IRQ(5)
+#define INT_DEMUX_2             AM_IRQ(53)
+#define INT_ASYNC_FIFO_FILL     AM_IRQ(18)
+#define INT_ASYNC_FIFO_FLUSH    AM_IRQ(19)
+#define INT_ASYNC_FIFO2_FILL    AM_IRQ(24)
+#define INT_ASYNC_FIFO2_FLUSH   AM_IRQ(25)
+
 struct ts_input {
 	int                  mode;
 	struct pinctrl      *pinctrl;
@@ -19,21 +30,19 @@ struct ts_input {
 };
 
 struct fe_ops {
-	struct dvb_frontend 	*fe;
-	struct i2c_adapter 	*i2c;	
+	struct dvb_frontend 	*fe[TOTAL_AML_INPUTS];
+	struct i2c_adapter 	*i2c[TOTAL_AML_INPUTS];
 	struct ts_input	   	ts[3];
 	struct device       	*dev;
 	struct platform_device  *pdev;
 	struct pinctrl      	*card_pinctrl;
 	void __iomem 		*demux_base;
 	void __iomem 		*afifo_base;
-	int			demux_irq;
-	int			afifo_irq;
-	u32 total_nims;
-#ifdef CONFIG_ARM64
-	int fec_reset;
-	int power_ctrl;
-#endif
+	int			demux_irq[TOTAL_AML_INPUTS];
+	int			afifo_irq[TOTAL_AML_INPUTS];
+	u32 			total_nims;
+	int 			fec_reset[TOTAL_AML_INPUTS];
+	int 			power_ctrl[TOTAL_AML_INPUTS];
 };
 
 void get_fe_ops(struct fe_ops *p);
