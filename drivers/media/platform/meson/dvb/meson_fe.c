@@ -269,8 +269,8 @@ static int fe_dvb_probe(struct platform_device *pdev)
 				meson_dvb.demux_irq[i] = INT_DEMUX;
 				meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO_FLUSH;
 			} else {
-				meson_dvb.demux_irq[i] = INT_DEMUX1
-				meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO2LUSH;
+				meson_dvb.demux_irq[i] = INT_DEMUX_1;
+				meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO2_FLUSH;
 			}
 #endif
 			if (i) {
