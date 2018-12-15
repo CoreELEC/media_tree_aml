@@ -40,15 +40,15 @@
 #define TS_IN_COUNT       3
 #define S2P_COUNT         2
 
-#define DMX_DEV_COUNT     1
-#define FE_DEV_COUNT      1
+#define DMX_DEV_COUNT     3
+#define FE_DEV_COUNT      2
 #define CHANNEL_COUNT     31
 #define FILTER_COUNT      31
 #define FILTER_LEN        15
 #define SEC_BUF_GRP_COUNT 4
 #define SEC_BUF_BUSY_SIZE 4
 #define SEC_BUF_COUNT     (SEC_BUF_GRP_COUNT*8)
-#define ASYNCFIFO_COUNT   1
+#define ASYNCFIFO_COUNT   2
 
 typedef enum dmx_source {
 	DMX_SOURCE_FRONT0 = 0,
@@ -247,13 +247,13 @@ struct aml_dvb {
 	int		     ts_out_invert;
 	void __iomem 	     *demux_base;
 	void __iomem 	     *afifo_base;
-	int			demux_irq;
-	int			afifo_irq;
+	int			demux_irq[ASYNCFIFO_COUNT];
+	int			afifo_irq[ASYNCFIFO_COUNT];
 };
 
 
 /*AMLogic demux interface*/
-extern int aml_dmx_hw_init(struct aml_dmx *dmx);
+extern int aml_dmx_hw_init(struct aml_dmx *dmx, int id);
 extern int aml_dmx_hw_deinit(struct aml_dmx *dmx);
 extern int aml_dmx_hw_start_feed(struct dvb_demux_feed *dvbdmxfeed);
 extern int aml_dmx_hw_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
@@ -274,11 +274,11 @@ extern int dmx_get_ts_serial(enum aml_ts_source_t src);
 
 
 /*AMLogic ASYNC FIFO interface*/
-extern int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo);
+extern int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo, int id);
 extern int aml_asyncfifo_hw_deinit(struct aml_asyncfifo *afifo);
 extern int aml_asyncfifo_hw_set_source(struct aml_asyncfifo *afifo,
 					enum aml_dmx_id_t src);
-extern int aml_asyncfifo_hw_reset(struct aml_asyncfifo *afifo);
+extern int aml_asyncfifo_hw_reset(struct aml_asyncfifo *afifo, int id);
 
 /*Get the Audio & Video PTS*/
 extern u32 aml_dmx_get_video_pts(struct aml_dvb *dvb);

@@ -1,19 +1,5 @@
-/*
- * drivers/amlogic/dvb_tv/dvb_reg.h
- *
- * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
-*/
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2018-present Team CoreELEC (https://coreelec.org)
 
 #ifndef _DVB_REG_H_
 #define _DVB_REG_H_
@@ -31,16 +17,6 @@ extern void aml_write_vcbus(unsigned int reg, unsigned int val);
 
 #define WRITE_VCBUS_REG(_r, _v)  aml_write_vcbus(_r, _v)
 #define READ_VCBUS_REG(_r)       aml_read_vcbus(_r)
-
-#define BASE_IRQ 32
-#define AM_IRQ(reg)             (reg + BASE_IRQ)
-#define INT_DEMUX               AM_IRQ(23)
-#define INT_DEMUX_1             AM_IRQ(5)
-#define INT_DEMUX_2             AM_IRQ(53)
-#define INT_ASYNC_FIFO_FILL     AM_IRQ(18)
-#define INT_ASYNC_FIFO_FLUSH    AM_IRQ(19)
-#define INT_ASYNC_FIFO2_FILL    AM_IRQ(24)
-#define INT_ASYNC_FIFO2_FLUSH   AM_IRQ(25)
 
 #endif
 
