@@ -37,7 +37,7 @@
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 
-#define TS_IN_COUNT       3
+#define TS_IN_COUNT       2
 #define S2P_COUNT         2
 
 #define DMX_DEV_COUNT     3
@@ -228,27 +228,33 @@ struct aml_swfilter {
 };
 
 struct aml_dvb {
-	struct dvb_device    dvb_dev;
-	struct aml_ts_input  ts[TS_IN_COUNT];
-	struct aml_s2p       s2p[S2P_COUNT];
-	struct aml_dmx       dmx[DMX_DEV_COUNT];
-	struct aml_asyncfifo asyncfifo[ASYNCFIFO_COUNT];
-	struct dvb_adapter   dvb_adapter;
-	struct device       *dev;
-	struct platform_device *pdev;
-	enum aml_ts_source_t      stb_source;
-	enum aml_ts_source_t      tso_source;
-	int                  dmx_init;
-	int                  reset_flag;
-	spinlock_t           slock;
-	struct timer_list    watchdog_timer;
-	int                  dmx_watchdog_disable[DMX_DEV_COUNT];
-	struct aml_swfilter  swfilter;
-	int		     ts_out_invert;
-	void __iomem 	     *demux_base;
-	void __iomem 	     *afifo_base;
+	struct dvb_device    	dvb_dev;
+	struct aml_ts_input  	ts[TS_IN_COUNT];
+	struct aml_s2p       	s2p[S2P_COUNT];
+	struct aml_dmx       	dmx[DMX_DEV_COUNT];
+	struct aml_asyncfifo 	asyncfifo[ASYNCFIFO_COUNT];
+	struct dvb_adapter   	dvb_adapter;
+	struct device       	*dev;
+	struct platform_device 	*pdev;
+	enum aml_ts_source_t 	stb_source;
+	enum aml_ts_source_t 	tso_source;
+	int                  	dmx_init;
+	int                  	reset_flag;
+	spinlock_t           	slock;
+	struct timer_list    	watchdog_timer;
+	int                  	dmx_watchdog_disable[DMX_DEV_COUNT];
+	struct aml_swfilter  	swfilter;
+	int		     	ts_out_invert;
+	void __iomem 	     	*demux_base;
+	void __iomem 	     	*afifo_base;
 	int			demux_irq[ASYNCFIFO_COUNT];
 	int			afifo_irq[ASYNCFIFO_COUNT];
+	u32 			total_nims;
+	struct dvb_frontend 	*fe[TS_IN_COUNT];
+	struct i2c_adapter 	*i2c[TS_IN_COUNT];
+	int 			fec_reset[TS_IN_COUNT];
+	int 			power_ctrl[TS_IN_COUNT];
+	int 			lock_led[TS_IN_COUNT];
 };
 
 
@@ -300,8 +306,8 @@ extern void aml_dmx_start_error_check(enum aml_ts_source_t src,
 					struct dvb_frontend *fe);
 extern int  aml_dmx_stop_error_check(enum aml_ts_source_t src,
 					struct dvb_frontend *fe);
-extern int aml_regist_dmx_class(void);
-extern int aml_unregist_dmx_class(void);
+//extern int aml_regist_dmx_class(void);
+//extern int aml_unregist_dmx_class(void);
 extern void dvb_frontend_retune(struct dvb_frontend *fe);
 
 struct devio_aml_platform_data {

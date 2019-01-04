@@ -35,7 +35,7 @@
 #define dbg_avl(fmt, args...) \
 	do {\
 		if (debug_avl)\
-			printk("AVL: %s: " fmt "\n", __func__, ##args);\
+			dev_info(&priv->i2c->dev, "%s: %s: " fmt "\n", KBUILD_MODNAME, __func__, ##args);\
 	} while (0)
 MODULE_PARM_DESC(debug_avl, "\n\t\t Enable AVL demodulator debug information");
 static int debug_avl;
@@ -1122,7 +1122,7 @@ static int AVL_Demod_DVBSx_Diseqc_SendModulationData(struct avl6862_priv *priv, 
 			priv->config->eDiseqcStatus = AVL_DOS_InModulation;
 		}
 		do {
-			msleep(1);
+			msleep(3);
 			if (++uiTempOutTh > 500) {
 				r |= AVL_EC_TIMEOUT;
 				return(r);
@@ -1176,7 +1176,7 @@ int AVL_SX_DiseqcSendCmd(struct avl6862_priv *priv, AVL_puchar pCmd, u8 CmdSize)
 
 	r = AVL_Demod_DVBSx_Diseqc_SendModulationData(priv, pCmd, CmdSize);
 	if(r != AVL_EC_OK) {
-		printk("AVL_SX_DiseqcSendCmd failed !\n");
+		printk("AVL_SX_DiseqcSendCmd failed:%02x\n", r);
 	} else {
 		do {
 			msleep(5);
@@ -1184,7 +1184,7 @@ int AVL_SX_DiseqcSendCmd(struct avl6862_priv *priv, AVL_puchar pCmd, u8 CmdSize)
 		} while(TxStatus.m_TxDone != 1);
 		if (r == AVL_EC_OK ) {
 		} else {
-			printk("AVL_SX_DiseqcSendCmd Err. !\n");
+			printk("AVL_SX_DiseqcSendCmd Err.:%02x\n", r);
 		}
 	}
 	return (r);
@@ -1275,6 +1275,7 @@ static int avl6862_diseqc(struct dvb_frontend *fe,
 	struct avl6862_priv *priv = fe->demodulator_priv;
 	int ret;
 
+	dev_info(&priv->i2c->dev, "%s: %s\n", KBUILD_MODNAME, __func__);
 	ret = avl6862_set_dvbmode(fe,SYS_DVBS);
 	if (ret)
 	  return ret;
