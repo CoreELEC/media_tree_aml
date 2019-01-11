@@ -278,6 +278,15 @@ static int fe_dvb_probe(struct platform_device *pdev)
 						meson_dvb.s2p[meson_dvb.ts[i].s2p_id].invert = value;
 					}
 				}
+				meson_dvb.xtal[i] = MXL603_XTAL_16MHz;
+				snprintf(buf, sizeof(buf), "tuner%d_xtal", i);
+				ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
+				if(!ret){
+					if (value == 24)
+						meson_dvb.xtal[i] = MXL603_XTAL_24MHz;
+
+					dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
+				}
 
 			} else {
 				dev_info(&pdev->dev, "No %s config...\n", buf);
@@ -400,12 +409,15 @@ static int fe_dvb_probe(struct platform_device *pdev)
 				if (meson_dvb.fe[i] == NULL) {
 					dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
 					continue;
-				}								
-				if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
-					dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
-					dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
-					dvb_frontend_detach(meson_dvb.fe[i]);
-					continue;
+				}
+				mxl608cfg.xtal_freq_hz = meson_dvb.xtal[i];
+				if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl608cfg) == NULL) {
+					if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
+						dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
+						dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
+						dvb_frontend_detach(meson_dvb.fe[i]);
+						continue;
+					}
 				}
 				meson_dvb.total_nims++;
 				continue;
