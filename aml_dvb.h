@@ -255,6 +255,7 @@ struct aml_dvb {
 	int 			fec_reset[TS_IN_COUNT];
 	int 			power_ctrl[TS_IN_COUNT];
 	int 			lock_led[TS_IN_COUNT];
+	int			xtal[TS_IN_COUNT];
 };
 
 
