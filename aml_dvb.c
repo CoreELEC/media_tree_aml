@@ -171,8 +171,6 @@ static int aml_dvb_asyncfifo_init(struct aml_dvb *advb, struct aml_asyncfifo *as
 {
 	asyncfifo->dvb = advb;
 	asyncfifo->id = id;
-	asyncfifo->init = 0;
-	asyncfifo->flush_size = 256*1024;
 
 	return aml_asyncfifo_hw_init(asyncfifo, id);
 }

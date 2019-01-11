@@ -251,7 +251,8 @@ static void dmxn_op_chan(int dmx, int ch, int(*op)(int, int), int ch_op)
 #define LARGE_SEC_BUFF_MASK  0xFFFFFFFF
 #define LARGE_SEC_BUFF_COUNT 32
 #define WATCHDOG_TIMER    250
-#define ASYNCFIFO_BUFFER_SIZE_DEFAULT (512*1024)
+#define ASYNCFIFO_PACKETS 2048
+#define ASYNCFIFO_BUFFER_SIZE_DEFAULT (188 * ASYNCFIFO_PACKETS)
 
 #define DEMUX_INT_MASK\
 			((0<<(AUDIO_SPLICING_POINT))    |\
@@ -3349,6 +3350,9 @@ int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo, int id)
 	unsigned long buf = asyncfifo_alloc_buffer(len);
 	if (!buf)
 		return -1;
+
+	afifo->init = 0;
+	afifo->flush_size = ASYNCFIFO_BUFFER_SIZE_DEFAULT / 2;
 
 	/*afifo_reset(0);*/
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
