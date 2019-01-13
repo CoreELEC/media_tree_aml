@@ -54,6 +54,7 @@ static struct reset_control *aml_dvb_demux_reset_ctl;
 static struct reset_control *aml_dvb_afifo_reset_ctl;
 static struct reset_control *aml_dvb_ahbarb0_reset_ctl;
 static struct reset_control *aml_dvb_uparsertop_reset_ctl;
+extern void dmx_reset_dmx_sw(void);
 
 static void aml_dvb_dmx_release(struct aml_dvb *advb, struct aml_dmx *dmx)
 {
@@ -237,6 +238,7 @@ int __init aml_dvb_init(void)
 
 		platform_set_drvdata(advb->pdev, advb->fe[i]);
 	}
+	dmx_reset_dmx_sw();
 	pr_info("Meson DVB frontend(s) registered successfully.\n");
 	return ret;
 error:

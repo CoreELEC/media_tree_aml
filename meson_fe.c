@@ -15,8 +15,10 @@
 #include "ascot3.h"
 #include "cxd2837.h"
 #include "mxl603.h"
+#include "mxl608.h"
 #include "avl6211.h"
 #include "mn88436.h"
+#include "tuner_ftm4862.h"
 #include "c_stb_regs_define.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
@@ -133,6 +135,9 @@ static struct avl6211_config avl6211cfg[] = {
 	},
 };
 
+static struct ftm4862_config ftm4862_config = {
+	.reserved = 0,
+};
 
 void get_aml_dvb(struct aml_dvb *p)
 {
@@ -160,7 +165,7 @@ void reset_demod(int i)
 		gpio_direction_output(meson_dvb.fec_reset[i], 0);
 		msleep(600);
 		gpio_direction_output(meson_dvb.fec_reset[i], 1);
-		msleep(200);
+		msleep(600);
 	}
 }
 
@@ -401,6 +406,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		dev_info(&pdev->dev, "DVB demod detection for i2c-%d (%s)...\n", i2c[i], meson_dvb.i2c[i]->name);
 
 		if (strcmp(str,"wetek-dvb")) {
+		  if (strcmp(str,"magicsee")) {		/* MeCool */
 			if (strcmp(str,"avl6762")) {
 				dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
 				avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
@@ -410,14 +416,11 @@ static int fe_dvb_probe(struct platform_device *pdev)
 					dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
 					continue;
 				}
-				mxl608cfg.xtal_freq_hz = meson_dvb.xtal[i];
-				if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl608cfg) == NULL) {
-					if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
-						dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
-						dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
-						dvb_frontend_detach(meson_dvb.fe[i]);
-						continue;
-					}
+				if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
+					dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
+					dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
+					dvb_frontend_detach(meson_dvb.fe[i]);
+					continue;
 				}
 				meson_dvb.total_nims++;
 				continue;
@@ -429,6 +432,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 				dev_info(&pdev->dev, "Failed to find AVL6762 demod!\n");
 				continue;
 			}
+			mxl608cfg.xtal_freq_hz = meson_dvb.xtal[i];
 			if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl608cfg) == NULL) {
 				dev_info(&pdev->dev, "Failed to find MxL 608 tuner!\n");
 				dev_info(&pdev->dev, "Detaching Availink AVL6762 frontend!\n");
@@ -437,7 +441,24 @@ static int fe_dvb_probe(struct platform_device *pdev)
 			}
 			meson_dvb.total_nims++;
 			continue;
-		}
+		  } else {  				/* MagicSee */
+			dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
+			avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+			meson_dvb.fe[i] = avl6862_attach(&avl6862cfg, meson_dvb.i2c[i]);
+			if (meson_dvb.fe[i] == NULL) {
+				dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
+				continue;
+			}
+			if (ftm4862_attach(meson_dvb.fe[i], &ftm4862_config, meson_dvb.i2c[i]) == NULL) {
+				dev_info(&pdev->dev, "Failed to find FMT4862 dual tuner!\n");
+				dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
+				dvb_frontend_detach(meson_dvb.fe[i]);
+				continue;
+			}
+			meson_dvb.total_nims++;
+			continue;
+		  }		
+		}					/* WeTek */
 		reset_demod(i);
 		meson_dvb.fe[i] = NULL;
 		dev_info(&pdev->dev, "Checking for AVL6211 DVB-S/S2 demod ...\n");

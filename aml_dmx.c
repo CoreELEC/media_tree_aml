@@ -305,7 +305,18 @@ static int tsfile_clkdiv = 4;
 #define dmx_get_dev(dmx) (((struct aml_dvb *)((dmx)->demux.priv))->dev)
 #define asyncfifo_get_dev(afifo) ((afifo)->dvb->dev)
 
+void dmx_reset_dmx_id_hw_ex_unlock(struct aml_dvb *dvb, int id, int reset_irq);
+#if 0
+static void dmx_reset_dmx_id_hw_resume(struct aml_dmx *dmx)
+{
+	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
+	int i;
 
+	for (i = 0; i < DMX_DEV_COUNT; i++) {
+		dmx_reset_dmx_id_hw_ex_unlock(dvb, i, 0);
+	}
+}
+#endif
 /*Section buffer watchdog*/
 static void section_buffer_watchdog_func(struct timer_list *t)
 {
@@ -2539,9 +2550,9 @@ pr_dbg(" %d irq:%d\n", dvb->stb_source, reset_irq);
 		}
 
 		for (n = 0; n < CHANNEL_COUNT; n++) {
-			/*struct aml_channel *chan = &dmx->channel[n];*/
+			struct aml_channel *chan = &dmx->channel[n];
 
-			/*if (chan->used)*/
+			if (chan->used)
 			{
 				dmx_set_chan_regs(dmx, n);
 			}
@@ -2704,9 +2715,9 @@ void dmx_reset_dmx_hw_ex_unlock(struct aml_dvb *dvb, struct aml_dmx *dmx,
 		}
 
 		for (n = 0; n < CHANNEL_COUNT; n++) {
-			/*struct aml_channel *chan = &dmx->channel[n];*/
+			struct aml_channel *chan = &dmx->channel[n];
 
-			/*if (chan->used)*/
+			if (chan->used)
 			{
 				dmx_set_chan_regs(dmx, n);
 			}
@@ -2768,6 +2779,16 @@ void dmx_reset_dmx_hw(struct aml_dvb *dvb, int id)
 {
 	dmx_reset_dmx_id_hw_ex(dvb, id, 1);
 }
+
+void dmx_reset_dmx_sw(void)
+{
+	struct aml_dvb *dvb = aml_get_dvb_device();
+	int i;
+
+	for (i = 0; i < DMX_DEV_COUNT; i++)
+		dmx_reset_dmx_id_hw_ex(dvb, i, 0);
+}
+//EXPORT_SYMBOL(dmx_reset_dmx_sw);
 
 /*Allocate subtitle pes buffer*/
 static int alloc_subtitle_pes_buffer(struct aml_dmx *dmx)
@@ -2912,12 +2933,15 @@ void dmx_free_chan(struct aml_dmx *dmx, int cid)
 }
 
 /*Add a section*/
+static void dmx_remove_filter(struct aml_dmx *dmx, int cid, int fid);
+
 static int dmx_chan_add_filter(struct aml_dmx *dmx, int cid,
 			       struct dvb_demux_filter *filter)
 {
-	int id = -1;
-	int i;
+	int id = -1, cont = 0;
+	int i, j;
 
+get_fid:
 	for (i = 0; i < FILTER_COUNT; i++) {
 		if (!dmx->filter[i].used) {
 			id = i;
@@ -2926,9 +2950,26 @@ static int dmx_chan_add_filter(struct aml_dmx *dmx, int cid,
 	}
 
 	if (id == -1) {
-		pr_error("too many filters\n");
-		return -1;
+		for (i = 0; i < FILTER_COUNT; i++)
+			dmx_remove_filter(dmx, dmx->filter[i].chan_id, i);
+		if(!cont) {
+			cont = 1;
+			goto get_fid;
+		}
+		if (id == -1) {
+			pr_error("too many filters\n");
+			return -1;
+		}
 	}
+
+	for (i = SYS_CHAN_COUNT; i < CHANNEL_COUNT; i++) {
+		if ((dmx->channel[i].used) && (i == cid)) {
+			for (j = 0; j < FILTER_COUNT; j++)
+				if(dmx->filter[j].chan_id == cid)
+					dmx_remove_filter(dmx, cid, j);
+		}
+	}
+	pr_dbg("id:%d cid:%d\n", id, cid);
 
 	dmx->filter[id].chan_id = cid;
 	dmx->filter[id].used = 1;
@@ -2944,6 +2985,7 @@ static void dmx_remove_filter(struct aml_dmx *dmx, int cid, int fid)
 {
 	dmx->filter[fid].used = 0;
 	dmx->channel[cid].filter_count--;
+	pr_dbg("fid:%d cid:%d fc:%d\n", fid, cid, dmx->channel[cid].filter_count);
 
 	dmx_set_filter_regs(dmx, fid);
 	dmx_clear_filter_buffer(dmx, fid);
