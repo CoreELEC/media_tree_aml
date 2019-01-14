@@ -3394,7 +3394,7 @@ int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo, int id)
 		return -1;
 
 	afifo->init = 0;
-	afifo->flush_size = ASYNCFIFO_BUFFER_SIZE_DEFAULT / 2;
+	afifo->flush_size = ASYNCFIFO_BUFFER_SIZE_DEFAULT / 32;
 
 	/*afifo_reset(0);*/
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
