@@ -13,7 +13,7 @@
 #include "avl6862.h"
 #include "r912.h"
 #include "ascot3.h"
-#include "cxd2837.h"
+#include "cxd2841er_wetek.h"
 #include "mxl603.h"
 #include "mxl608.h"
 #include "avl6211.h"
@@ -51,16 +51,14 @@ static struct avl6862_config avl6762cfg = {
 	.tuner_address = 0,
 	.ts_serial = 0,
 };
-static struct cxd2837_cfg cxd2837cfg = {
-		.adr = 0x6C,
-		.if_agc_polarity = 1,
-		.rfain_monitoring = 0,
+static struct cxd2841er_config cxd2841cfg = {
+		.i2c_addr = 0x6C,
+		.if_agc = 0,
+		.ifagc_adc_range = 0x39,
 		.ts_error_polarity = 0,
 		.clock_polarity = 1,
-		.ifagc_adc_range = 0,
-		.spec_inv = 0,
-		.xtal = XTAL_20500KHz,
-		.ts_clock = SERIAL_TS_CLK_MID_FULL,
+		.mxl603	= 0,
+		.xtal = SONY_XTAL_20500,
 };
 struct ascot3_config ascot3cfg = {
 		.i2c_address = 0x60,
@@ -491,18 +489,22 @@ panasonic:
 sony:
 		reset_demod(i);
 		meson_dvb.fe[i] = NULL;
-		dev_info(&pdev->dev, "Checking for Sony CXD2837 DVB-C/T/T2 demod ...\n");
+		dev_info(&pdev->dev, "Checking for Sony CXD2841ER DVB-C/T/T2 demod ...\n");
 
-		meson_dvb.fe[i] =  cxd2837_attach(meson_dvb.i2c[i], &cxd2837cfg);
+		meson_dvb.fe[i] =  cxd2841er_attach_wetek(&cxd2841cfg,meson_dvb.i2c[i]);
 
 		if (meson_dvb.fe[i] != NULL) {
 			if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl603cfg) == NULL) {
 				dev_info(&pdev->dev, "Failed to find MxL603 tuner!\n");
-				dev_info(&pdev->dev, "Detaching Sony CXD2837 DVB-C/T/T2 frontend!\n");
-				dvb_frontend_detach(meson_dvb.fe[i]);
-				continue;
+				cxd2841cfg.if_agc = 1;
+				cxd2841cfg.ifagc_adc_range = 0x50;
+				if (ascot3_attach(meson_dvb.fe[i], &ascot3cfg, meson_dvb.i2c[i]) == NULL) {
+					dev_info(&pdev->dev, "Failed to find Sony ASCOT3 tuner!\n");
+					dev_info(&pdev->dev, "Detaching Sony CXD2841ER DVB-C/T/T2 frontend!\n");
+					dvb_frontend_detach(meson_dvb.fe[i]);
+					continue;
+				}
 			}
-
 			meson_dvb.total_nims++;
 			continue;
 		}
