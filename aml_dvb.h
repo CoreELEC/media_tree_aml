@@ -37,6 +37,13 @@
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 
+#ifndef KERNEL_VERSION
+#define KERNEL_VERSION(a,b,c) (a*1000+b*100+c)
+#endif
+#ifndef LINUX_VERSION_CODE
+#define LINUX_VERSION_CODE 	KERNEL_VERSION(4, 20, 2)
+#endif
+
 #define TS_IN_COUNT       2
 #define S2P_COUNT         2
 

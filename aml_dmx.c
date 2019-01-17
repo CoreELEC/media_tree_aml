@@ -1573,7 +1573,7 @@ static int _dmx_smallsec_disable(struct aml_smallsec *ss)
 		ss->buf_map = 0;
 	}
 	ss->enable = 0;
-	pr_inf("demux%d smallsec buf disable\n", ss->dmx->id);
+	pr_dbg("demux%d smallsec buf disable\n", ss->dmx->id);
 	return 0;
 }
 
@@ -1622,7 +1622,7 @@ static int _dmx_timeout_enable(struct aml_dmxtimeout *dto, int timeout,
 	dto->trigger = 0;
 	dto->enable = 1;
 
-	pr_inf("demux%d timeout enable:timeout(%d),ch(0x%x),match(%d)\n",
+	pr_dbg("demux%d timeout enable:timeout(%d),ch(0x%x),match(%d)\n",
 		dto->dmx->id, dto->timeout, dto->ch_disable, dto->match);
 
 	return 0;
@@ -1633,7 +1633,7 @@ static int _dmx_timeout_disable(struct aml_dmxtimeout *dto)
 	DMX_WRITE_REG(dto->dmx->id, DEMUX_INPUT_TIMEOUT, 0);
 	dto->enable = 0;
 	dto->trigger = 0;
-	pr_inf("demux%d timeout disable\n", dto->dmx->id);
+	pr_dbg("demux%d timeout disable\n", dto->dmx->id);
 
 	return 0;
 }

@@ -227,123 +227,126 @@ static int fe_dvb_probe(struct platform_device *pdev)
 #else
         np = of_find_node_by_name(NULL, "dvbfe");
 #endif
-	if (np) {
-		int s2p_id = 0;
+	int s2p_id = 0;
 
-		meson_dvb.s2p[0].invert = 0;
-		meson_dvb.s2p[1].invert = 0;
-		for (i = 0; i < TS_IN_COUNT; i++) {
-			meson_dvb.ts[i].mode   = AM_TS_DISABLE;
-			meson_dvb.ts[i].s2p_id = -1;
-			meson_dvb.ts[i].control = 0;
-			meson_dvb.fec_reset[i] = 0;
-			meson_dvb.power_ctrl[i] = 0;
-			meson_dvb.lock_led[i] = 0;
+	meson_dvb.s2p[0].invert = 0;
+	meson_dvb.s2p[1].invert = 0;
+	for (i = 0; i < TS_IN_COUNT; i++) {
+		meson_dvb.ts[i].mode   = AM_TS_DISABLE;
+		meson_dvb.ts[i].s2p_id = -1;
+		meson_dvb.ts[i].control = 0;
+		meson_dvb.fec_reset[i] = 0;
+		meson_dvb.power_ctrl[i] = 0;
+		meson_dvb.lock_led[i] = 0;
+
+		if (np) {
 			snprintf(buf, sizeof(buf), "dtv_demod%d_i2c_adap_id", i);
 			if (of_property_read_u32(np, buf, &i2c[i]) || i2c[i] < 0)
 				continue;
+		}
+		if (i2c[i] < 0)
+			continue;
 
-			meson_dvb.i2c[i] = i2c_get_adapter(i2c[i]);
-			if (meson_dvb.i2c[i] == NULL)
-				continue;
+		meson_dvb.i2c[i] = i2c_get_adapter(i2c[i]);
+		if (meson_dvb.i2c[i] == NULL)
+			continue;
 
-			dev_info(&pdev->dev, "Found i2c-%d adapter: %s\n", i2c[i], meson_dvb.i2c[i]->name);
+		dev_info(&pdev->dev, "Found i2c-%d adapter: %s\n", i2c[i] , meson_dvb.i2c[i]->name);
 
-			snprintf(buf, sizeof(buf), "ts%d", i);
-			ret = of_property_read_string(pdev->dev.of_node, buf, &str);
-			if (!ret) {
-				int value;
-				if (!strcmp(str, "parallel")) {
-					dev_info(&pdev->dev, "%s: parallel\n", buf);
-					snprintf(buf, sizeof(buf), "p_ts%d", i);
-					meson_dvb.ts[i].mode    = AM_TS_PARALLEL;
-					meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
-				}
-				else if (!strcmp(str, "serial")) {
-					dev_info(&pdev->dev, "%s: serial s2p%d\n", buf, s2p_id);
-					snprintf(buf, sizeof(buf), "s_ts%d", i);
-					meson_dvb.ts[i].mode    = AM_TS_SERIAL;
-					meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
-					meson_dvb.ts[i].s2p_id = s2p_id;
-					s2p_id++;
-				}
-				snprintf(buf, sizeof(buf), "ts%d_control", i);
+		snprintf(buf, sizeof(buf), "ts%d", i);
+		ret = of_property_read_string(pdev->dev.of_node, buf, &str);
+		if (!ret) {
+			int value;
+			if (!strcmp(str, "parallel")) {
+				dev_info(&pdev->dev, "%s: parallel\n", buf);
+				snprintf(buf, sizeof(buf), "p_ts%d", i);
+				meson_dvb.ts[i].mode    = AM_TS_PARALLEL;
+				meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
+			}
+			else if (!strcmp(str, "serial")) {
+				dev_info(&pdev->dev, "%s: serial s2p%d\n", buf, s2p_id);
+				snprintf(buf, sizeof(buf), "s_ts%d", i);
+				meson_dvb.ts[i].mode    = AM_TS_SERIAL;
+				meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
+				meson_dvb.ts[i].s2p_id = s2p_id;
+				s2p_id++;
+			}
+			snprintf(buf, sizeof(buf), "ts%d_control", i);
+			ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
+			if(!ret){
+				dev_info(&pdev->dev, "%s: 0x%x\n", buf, value);
+				meson_dvb.ts[i].control = value;
+			}
+			if(meson_dvb.ts[i].s2p_id != -1){
+				snprintf(buf, sizeof(buf), "ts%d_invert", i);
 				ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
 				if(!ret){
 					dev_info(&pdev->dev, "%s: 0x%x\n", buf, value);
-					meson_dvb.ts[i].control = value;
+					meson_dvb.s2p[meson_dvb.ts[i].s2p_id].invert = value;
 				}
-				if(meson_dvb.ts[i].s2p_id != -1){
-					snprintf(buf, sizeof(buf), "ts%d_invert", i);
-					ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
-					if(!ret){
-						dev_info(&pdev->dev, "%s: 0x%x\n", buf, value);
-						meson_dvb.s2p[meson_dvb.ts[i].s2p_id].invert = value;
-					}
-				}
-				meson_dvb.xtal[i] = MXL603_XTAL_16MHz;
-				snprintf(buf, sizeof(buf), "tuner%d_xtal", i);
-				ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
-				if(!ret){
-					if (value == 24)
-						meson_dvb.xtal[i] = MXL603_XTAL_24MHz;
+			}
+			meson_dvb.xtal[i] = MXL603_XTAL_16MHz;
+			snprintf(buf, sizeof(buf), "tuner%d_xtal", i);
+			ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
+			if(!ret){
+				if (value == 24)
+					meson_dvb.xtal[i] = MXL603_XTAL_24MHz;
 
-					dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
-				}
+				dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
+			}
 
-			} else {
-				dev_info(&pdev->dev, "No %s config...\n", buf);
-				meson_dvb.i2c[i] = NULL;
-				continue;
-			}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
-			snprintf(buf, sizeof(buf), "demux%d", i);
-			meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, buf);
-			if (meson_dvb.demux_irq[i] < 0) {
-				dev_err(&pdev->dev, "can't find IRQ for demux%d\n", i);
-				return meson_dvb.demux_irq[i];
-			}
-			snprintf(buf, sizeof(buf), "asyncfifo%d", i);
-			meson_dvb.afifo_irq[i] = platform_get_irq_byname(pdev, buf);
-			if (meson_dvb.afifo_irq[i] < 0) {
-				dev_err(&pdev->dev, "can't find IRQ for asyncfifo%d\n", i);
-				return meson_dvb.afifo_irq[i];
-			}
-#else
-			if (i == 0) {
-				meson_dvb.demux_irq[i] = INT_DEMUX;
-				meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO_FLUSH;
-			} else {
-				meson_dvb.demux_irq[i] = INT_DEMUX_1;
-				meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO2_FLUSH;
-			}
-#endif
-			if (i == 0) {
-				meson_dvb.fec_reset[0] = of_get_named_gpio_flags(pdev->dev.of_node, "fec_reset_gpio-gpios", 0, NULL);
-				meson_dvb.power_ctrl[0] = of_get_named_gpio_flags(pdev->dev.of_node, "power_ctrl_gpio-gpios", 0, NULL);
-				meson_dvb.lock_led[0] = of_get_named_gpio_flags(pdev->dev.of_node, "lock_led_gpio-gpios", 0, NULL);
-
-			} else {
-				meson_dvb.fec_reset[1] = of_get_named_gpio_flags(pdev->dev.of_node, "fec_reset_gpio-gpios2", 0, NULL);
-				meson_dvb.power_ctrl[1] = of_get_named_gpio_flags(pdev->dev.of_node, "power_ctrl_gpio-gpios2", 0, NULL);
-				meson_dvb.lock_led[1] = of_get_named_gpio_flags(pdev->dev.of_node, "lock_led_gpio-gpios2", 0, NULL);
-			}
-			if (meson_dvb.fec_reset[i] > 0) {
-				dev_dbg(&pdev->dev, "GPIO fec_reset%d: %d\n", i, meson_dvb.fec_reset[i]);
-				gpio_request(meson_dvb.fec_reset[i], KBUILD_MODNAME);
-			} else
-				meson_dvb.fec_reset[i] = 0;
-			if (meson_dvb.power_ctrl[i] > 0) {
-				dev_dbg(&pdev->dev, "GPIO power_ctrl%d: %d\n", i, meson_dvb.power_ctrl[i]);
-				gpio_request(meson_dvb.power_ctrl[i], KBUILD_MODNAME);
-			} else
-				meson_dvb.power_ctrl[i] = 0;
-			if (meson_dvb.lock_led[i] > 0) {
-				dev_dbg(&pdev->dev, "GPIO lock_led%d: %d\n", i, meson_dvb.lock_led[i]);
-				gpio_request(meson_dvb.lock_led[i], KBUILD_MODNAME);
-			} else
-				meson_dvb.lock_led[i] = 0;
+		} else {
+			dev_info(&pdev->dev, "No %s config...\n", buf);
+			meson_dvb.i2c[i] = NULL;
+			continue;
 		}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+		snprintf(buf, sizeof(buf), "demux%d", i);
+		meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, buf);
+		if (meson_dvb.demux_irq[i] < 0) {
+			dev_err(&pdev->dev, "can't find IRQ for demux%d\n", i);
+			return meson_dvb.demux_irq[i];
+		}
+		snprintf(buf, sizeof(buf), "asyncfifo%d", i);
+		meson_dvb.afifo_irq[i] = platform_get_irq_byname(pdev, buf);
+		if (meson_dvb.afifo_irq[i] < 0) {
+			dev_err(&pdev->dev, "can't find IRQ for asyncfifo%d\n", i);
+			return meson_dvb.afifo_irq[i];
+		}
+#else
+		if (i == 0) {
+			meson_dvb.demux_irq[i] = INT_DEMUX;
+			meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO_FLUSH;
+		} else {
+			meson_dvb.demux_irq[i] = INT_DEMUX_1;
+			meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO2_FLUSH;
+		}
+#endif
+		if (i == 0) {
+			meson_dvb.fec_reset[0] = of_get_named_gpio_flags(pdev->dev.of_node, "fec_reset_gpio-gpios", 0, NULL);
+			meson_dvb.power_ctrl[0] = of_get_named_gpio_flags(pdev->dev.of_node, "power_ctrl_gpio-gpios", 0, NULL);
+			meson_dvb.lock_led[0] = of_get_named_gpio_flags(pdev->dev.of_node, "lock_led_gpio-gpios", 0, NULL);
+
+		} else {
+			meson_dvb.fec_reset[1] = of_get_named_gpio_flags(pdev->dev.of_node, "fec_reset_gpio-gpios2", 0, NULL);
+			meson_dvb.power_ctrl[1] = of_get_named_gpio_flags(pdev->dev.of_node, "power_ctrl_gpio-gpios2", 0, NULL);
+			meson_dvb.lock_led[1] = of_get_named_gpio_flags(pdev->dev.of_node, "lock_led_gpio-gpios2", 0, NULL);
+		}
+		if (meson_dvb.fec_reset[i] > 0) {
+			dev_dbg(&pdev->dev, "GPIO fec_reset%d: %d\n", i, meson_dvb.fec_reset[i]);
+			gpio_request(meson_dvb.fec_reset[i], KBUILD_MODNAME);
+		} else
+			meson_dvb.fec_reset[i] = 0;
+		if (meson_dvb.power_ctrl[i] > 0) {
+			dev_dbg(&pdev->dev, "GPIO power_ctrl%d: %d\n", i, meson_dvb.power_ctrl[i]);
+			gpio_request(meson_dvb.power_ctrl[i], KBUILD_MODNAME);
+		} else
+			meson_dvb.power_ctrl[i] = 0;
+		if (meson_dvb.lock_led[i] > 0) {
+			dev_dbg(&pdev->dev, "GPIO lock_led%d: %d\n", i, meson_dvb.lock_led[i]);
+			gpio_request(meson_dvb.lock_led[i], KBUILD_MODNAME);
+		} else
+			meson_dvb.lock_led[i] = 0;
 	}
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 	dvb_demux_clk_ctl = devm_clk_get(&pdev->dev, "demux");
@@ -404,18 +407,51 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		dev_info(&pdev->dev, "DVB demod detection for i2c-%d (%s)...\n", i2c[i], meson_dvb.i2c[i]->name);
 
 		if (strcmp(str,"wetek-dvb")) {
-		  if (strcmp(str,"magicsee")) {		/* MeCool */
-			if (strcmp(str,"avl6762")) {
+			if (strcmp(str,"magicsee")) {		/* MeCool */
+				if (strcmp(str,"avl6762")) {
+					dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
+					avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+					avl6862cfg.gpio_lock_led = meson_dvb.lock_led[i];
+					meson_dvb.fe[i] = avl6862_attach(&avl6862cfg, meson_dvb.i2c[i]);
+					if (meson_dvb.fe[i] == NULL) {
+						dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
+						continue;
+					}
+					if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
+						dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
+						dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
+						dvb_frontend_detach(meson_dvb.fe[i]);
+						continue;
+					}
+					meson_dvb.total_nims++;
+					continue;
+				}
+				dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");
+				avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+				meson_dvb.fe[i] = avl6862_attach(&avl6762cfg, meson_dvb.i2c[i]);
+				if (meson_dvb.fe[i] == NULL) {
+					dev_info(&pdev->dev, "Failed to find AVL6762 demod!\n");
+					continue;
+				}
+				mxl608cfg.xtal_freq_hz = meson_dvb.xtal[i];
+				if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl608cfg) == NULL) {
+					dev_info(&pdev->dev, "Failed to find MxL 608 tuner!\n");
+					dev_info(&pdev->dev, "Detaching Availink AVL6762 frontend!\n");
+					dvb_frontend_detach(meson_dvb.fe[i]);
+					continue;
+				}
+				meson_dvb.total_nims++;
+				continue;
+			} else {  				/* MagicSee */
 				dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
 				avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
-				avl6862cfg.gpio_lock_led = meson_dvb.lock_led[i];
 				meson_dvb.fe[i] = avl6862_attach(&avl6862cfg, meson_dvb.i2c[i]);
 				if (meson_dvb.fe[i] == NULL) {
 					dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
 					continue;
 				}
-				if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
-					dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
+				if (ftm4862_attach(meson_dvb.fe[i], &ftm4862_config, meson_dvb.i2c[i]) == NULL) {
+					dev_info(&pdev->dev, "Failed to find FMT4862 dual tuner!\n");
 					dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
 					dvb_frontend_detach(meson_dvb.fe[i]);
 					continue;
@@ -423,39 +459,6 @@ static int fe_dvb_probe(struct platform_device *pdev)
 				meson_dvb.total_nims++;
 				continue;
 			}
-			dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");
-			avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
-			meson_dvb.fe[i] = avl6862_attach(&avl6762cfg, meson_dvb.i2c[i]);
-			if (meson_dvb.fe[i] == NULL) {
-				dev_info(&pdev->dev, "Failed to find AVL6762 demod!\n");
-				continue;
-			}
-			mxl608cfg.xtal_freq_hz = meson_dvb.xtal[i];
-			if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl608cfg) == NULL) {
-				dev_info(&pdev->dev, "Failed to find MxL 608 tuner!\n");
-				dev_info(&pdev->dev, "Detaching Availink AVL6762 frontend!\n");
-				dvb_frontend_detach(meson_dvb.fe[i]);
-				continue;
-			}
-			meson_dvb.total_nims++;
-			continue;
-		  } else {  				/* MagicSee */
-			dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
-			avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
-			meson_dvb.fe[i] = avl6862_attach(&avl6862cfg, meson_dvb.i2c[i]);
-			if (meson_dvb.fe[i] == NULL) {
-				dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
-				continue;
-			}
-			if (ftm4862_attach(meson_dvb.fe[i], &ftm4862_config, meson_dvb.i2c[i]) == NULL) {
-				dev_info(&pdev->dev, "Failed to find FMT4862 dual tuner!\n");
-				dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
-				dvb_frontend_detach(meson_dvb.fe[i]);
-				continue;
-			}
-			meson_dvb.total_nims++;
-			continue;
-		  }		
 		}					/* WeTek */
 		reset_demod(i);
 		meson_dvb.fe[i] = NULL;
