@@ -47,7 +47,7 @@
 #define TS_IN_COUNT       2
 #define S2P_COUNT         2
 
-#define DMX_DEV_COUNT     3
+#define DMX_DEV_COUNT     2
 #define FE_DEV_COUNT      2
 #define CHANNEL_COUNT     31
 #define FILTER_COUNT      31
@@ -56,6 +56,7 @@
 #define SEC_BUF_BUSY_SIZE 4
 #define SEC_BUF_COUNT     (SEC_BUF_GRP_COUNT*8)
 #define ASYNCFIFO_COUNT   2
+#define DMX_PES_FILTERING 2
 
 typedef enum dmx_source {
 	DMX_SOURCE_FRONT0 = 0,
@@ -74,7 +75,6 @@ typedef enum dmx_source {
 enum aml_dmx_id_t {
 	AM_DMX_0 = 0,
 	AM_DMX_1,
-	AM_DMX_2,
 	AM_DMX_MAX,
 };
 

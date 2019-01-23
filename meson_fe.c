@@ -202,6 +202,8 @@ static int fe_dvb_probe(struct platform_device *pdev)
         int i2c[2] = {1, -1};
 	const char *str;
 	char buf[32];
+	int s2p_id = 0;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 	struct resource *r;
 #endif
@@ -227,8 +229,6 @@ static int fe_dvb_probe(struct platform_device *pdev)
 #else
         np = of_find_node_by_name(NULL, "dvbfe");
 #endif
-	int s2p_id = 0;
-
 	meson_dvb.s2p[0].invert = 0;
 	meson_dvb.s2p[1].invert = 0;
 	for (i = 0; i < TS_IN_COUNT; i++) {
@@ -407,6 +407,8 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		dev_info(&pdev->dev, "DVB demod detection for i2c-%d (%s)...\n", i2c[i], meson_dvb.i2c[i]->name);
 
 		if (strcmp(str,"wetek-dvb")) {
+			set_external_vol_gpio(&i, 1);
+			reset_demod(i);
 			if (strcmp(str,"magicsee")) {		/* MeCool */
 				if (strcmp(str,"avl6762")) {
 					dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
