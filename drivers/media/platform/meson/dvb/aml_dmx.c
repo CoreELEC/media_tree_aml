@@ -263,7 +263,7 @@ static void dmxn_op_chan(int dmx, int ch, int(*op)(int, int), int ch_op)
 #define DEMUX_INT_MASK\
 			((0<<(AUDIO_SPLICING_POINT))    |\
 			(0<<(VIDEO_SPLICING_POINT))     |\
-			(1<<(OTHER_PES_READY))          |\
+			(0<<(OTHER_PES_READY))          |\
 			(1<<(SUB_PES_READY))            |\
 			(1<<(SECTION_BUFFER_READY))     |\
 			(0<<(OM_CMD_READ_PENDING))      |\
@@ -312,7 +312,7 @@ static int tsfile_clkdiv = 4;
 #define asyncfifo_get_dev(afifo) ((afifo)->dvb->dev)
 
 void dmx_reset_dmx_id_hw_ex_unlock(struct aml_dvb *dvb, int id, int reset_irq);
-#if 0
+
 static void dmx_reset_dmx_id_hw_resume(struct aml_dmx *dmx)
 {
 	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
@@ -322,7 +322,7 @@ static void dmx_reset_dmx_id_hw_resume(struct aml_dmx *dmx)
 		dmx_reset_dmx_id_hw_ex_unlock(dvb, i, 0);
 	}
 }
-#endif
+
 /*Section buffer watchdog*/
 static void section_buffer_watchdog_func(struct timer_list *t)
 {
@@ -468,7 +468,7 @@ static int section_crc(struct aml_dmx *dmx, struct aml_filter *f, u8 *p)
 		sec->crc_val = ~0;
 		if (demux->check_crc32(feed, p, sec_len)) {
 			pr_error("section CRC check failed!\n");
-
+			dmx_reset_dmx_id_hw_resume(dmx);
 			return 0;
 		}
 	}
@@ -905,6 +905,7 @@ static void process_sub(struct aml_dmx *dmx)
 
 static void process_pes(struct aml_dmx *dmx)
 {
+#if 0
 	static long off, off_pre;
 	u8 *buffer1 = 0, *buffer2 = 0;
 	u8 *buffer1_phys = 0, *buffer2_phys = 0;
@@ -961,6 +962,7 @@ static void process_pes(struct aml_dmx *dmx)
 			}
 		}
 	}
+#endif
 }
 
 static void process_om_read(struct aml_dmx *dmx)
@@ -2669,18 +2671,16 @@ pr_dbg(" %d irq:%d\n", dvb->stb_source, reset_irq);
 }
 
 /*Reset the individual demux*/
-void dmx_reset_dmx_hw_ex_unlock(struct aml_dvb *dvb, struct aml_dmx *dmx,
-				int reset_irq)
+void dmx_reset_dmx_hw_ex_unlock(struct aml_dvb *dvb, struct aml_dmx *dmx, int reset_irq)
 {
-	{
-		if (!dmx->init)
-			return;
-		if (reset_irq) {
-			if (dmx->dmx_irq != -1)
-				disable_irq(dmx->dmx_irq);
-			if (dmx->dvr_irq != -1)
-				disable_irq(dmx->dvr_irq);
-		}
+	if (!dmx->init)
+		return;
+
+	if (reset_irq) {
+		if (dmx->dmx_irq != -1)
+			disable_irq(dmx->dmx_irq);
+		if (dmx->dvr_irq != -1)
+			disable_irq(dmx->dvr_irq);
 	}
 	if (reset_irq) {
 		/*del_timer_sync(&dvb->watchdog_timer); */
