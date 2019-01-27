@@ -58,30 +58,24 @@ extern void dmx_reset_dmx_sw(void);
 
 static void aml_dvb_dmx_release(struct aml_dvb *advb, struct aml_dmx *dmx)
 {
-	int i;
-
 	dvb_net_release(&dmx->dvb_net);
 	aml_dmx_hw_deinit(dmx);
 	dmx->demux.dmx.close(&dmx->demux.dmx);
 	dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->mem_fe);
-
-	for (i=0; i<DMX_DEV_COUNT; i++) {
-		dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->hw_fe[i]);
-	}
-
+	dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->hw_fe[dmx->id]);
 	dvb_dmxdev_release(&dmx->dmxdev);
 	dvb_dmx_release(&dmx->demux);
 }
 
 static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 {
-	int i, ret;
+	int ret;
 
+	dmx->id = id;
 	dmx->source  = 0;
 	dmx->dump_ts_select = 0;
-	dmx->dvr_irq = -1;
 
-	dmx->demux.dmx.capabilities 	= (DMX_TS_FILTERING  | DMX_SECTION_FILTERING | DMX_MEMORY_BASED_FILTERING );
+	dmx->demux.dmx.capabilities 	= (DMX_TS_FILTERING  | DMX_SECTION_FILTERING | DMX_MEMORY_BASED_FILTERING);
 	dmx->demux.filternum 		= dmx->demux.feednum = FILTER_COUNT;
 	dmx->demux.priv 		= advb;
 	dmx->demux.start_feed 		= aml_dmx_hw_start_feed;
@@ -101,15 +95,12 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 		goto error_dmxdev_init;
 	}
 
-	for (i=0; i<DMX_DEV_COUNT; i++) {
-		int source = i+DMX_FRONTEND_0;
-		dmx->hw_fe[i].source = source;
+	dmx->hw_fe[id].source = id + DMX_FRONTEND_0;
 
-		if ((ret = dmx->demux.dmx.add_frontend(&dmx->demux.dmx, &dmx->hw_fe[i])) < 0) {
-			pr_error("adding hw_frontend to dmx failed: error %d",ret);
-			dmx->hw_fe[i].source = 0;
-			goto error_add_hw_fe;
-		}
+	if ((ret = dmx->demux.dmx.add_frontend(&dmx->demux.dmx, &dmx->hw_fe[id])) < 0) {
+		pr_error("adding hw_frontend to dmx failed: error %d",ret);
+		dmx->hw_fe[id].source = 0;
+		goto error_add_hw_fe;
 	}
 
 	dmx->mem_fe.source = DMX_MEMORY_FE;
@@ -123,7 +114,6 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 		goto error_connect_fe;
 	}
 
-	dmx->id = id;
 	dmx->aud_chan = -1;
 	dmx->vid_chan = -1;
 	dmx->sub_chan = -1;
@@ -138,7 +128,7 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 	dmx->timeout.match      = 1;
 	dmx->timeout.trigger    = 0;
 
-	if ((ret = aml_dmx_hw_init(dmx, id)) <0) {
+	if ((ret = aml_dmx_hw_init(dmx)) <0) {
 		pr_error("demux%d hw init error %d", id, ret);
 		dmx->id = -1;
 		goto error_dmx_hw_init;
@@ -147,18 +137,21 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 	dvb_net_init(&advb->dvb_adapter, &dmx->dvb_net, &dmx->demux.dmx);
 
 	return 0;
+
 error_dmx_hw_init:
 error_connect_fe:
 	dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->mem_fe);
+
 error_add_mem_fe:
 error_add_hw_fe:
-	for (i=0; i<DMX_DEV_COUNT; i++) {
-		if (dmx->hw_fe[i].source)
-			dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->hw_fe[i]);
-	}
+	if (dmx->hw_fe[id].source)
+		dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->hw_fe[id]);
+
 	dvb_dmxdev_release(&dmx->dmxdev);
+
 error_dmxdev_init:
 	dvb_dmx_release(&dmx->demux);
+
 error_dmx_init:
 	return ret;
 }
@@ -192,10 +185,6 @@ int __init aml_dvb_init(void)
 	advb->stb_source = -1;
 	advb->tso_source = -1;
 
-	for (i = 0; i < DMX_DEV_COUNT; i++) {
-		advb->dmx[i].dmx_irq = -1;
-		advb->dmx[i].dvr_irq = -1;
-	}
 	ret =
 	    dvb_register_adapter(&advb->dvb_adapter, CARD_NAME, THIS_MODULE,
 				 advb->dev, adapter_nr);
