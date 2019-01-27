@@ -44,10 +44,10 @@
 #define LINUX_VERSION_CODE 	KERNEL_VERSION(4, 20, 2)
 #endif
 
-#define TS_IN_COUNT       2
+#define TS_IN_COUNT       3
 #define S2P_COUNT         2
 
-#define DMX_DEV_COUNT     2
+#define DMX_DEV_COUNT     3
 #define FE_DEV_COUNT      2
 #define CHANNEL_COUNT     31
 #define FILTER_COUNT      31
@@ -56,7 +56,6 @@
 #define SEC_BUF_BUSY_SIZE 4
 #define SEC_BUF_COUNT     (SEC_BUF_GRP_COUNT*8)
 #define ASYNCFIFO_COUNT   2
-#define DMX_PES_FILTERING 2
 
 typedef enum dmx_source {
 	DMX_SOURCE_FRONT0 = 0,
@@ -75,6 +74,7 @@ typedef enum dmx_source {
 enum aml_dmx_id_t {
 	AM_DMX_0 = 0,
 	AM_DMX_1,
+	AM_DMX_2,
 	AM_DMX_MAX,
 };
 
@@ -153,8 +153,6 @@ struct aml_dmx {
 	struct dmx_frontend  hw_fe[DMX_DEV_COUNT];
 	struct dmx_frontend  mem_fe;
 	struct dvb_net       dvb_net;
-	int                  dmx_irq;
-	int                  dvr_irq;
 	struct tasklet_struct     dmx_tasklet;
 	struct tasklet_struct     dvr_tasklet;
 	unsigned long        sec_pages;
@@ -169,7 +167,6 @@ struct aml_dmx {
 	int                  sub_buf_len;
 	struct aml_channel   channel[CHANNEL_COUNT];
 	struct aml_filter    filter[FILTER_COUNT];
-	irq_handler_t        irq_handler;
 	void                *irq_data;
 	int                  aud_chan;
 	int                  vid_chan;
@@ -193,7 +190,6 @@ struct aml_dmx {
 struct aml_asyncfifo {
 	int	id;
 	int	init;
-	int	asyncfifo_irq;
 	enum aml_dmx_id_t	source;
 	unsigned long	pages;
 	unsigned long   pages_map;
@@ -254,7 +250,7 @@ struct aml_dvb {
 	int		     	ts_out_invert;
 	void __iomem 	     	*demux_base;
 	void __iomem 	     	*afifo_base;
-	int			demux_irq[ASYNCFIFO_COUNT];
+	int			demux_irq[DMX_DEV_COUNT];
 	int			afifo_irq[ASYNCFIFO_COUNT];
 	u32 			total_nims;
 	struct dvb_frontend 	*fe[TS_IN_COUNT];
@@ -267,7 +263,7 @@ struct aml_dvb {
 
 
 /*AMLogic demux interface*/
-extern int aml_dmx_hw_init(struct aml_dmx *dmx, int id);
+extern int aml_dmx_hw_init(struct aml_dmx *dmx);
 extern int aml_dmx_hw_deinit(struct aml_dmx *dmx);
 extern int aml_dmx_hw_start_feed(struct dvb_demux_feed *dvbdmxfeed);
 extern int aml_dmx_hw_stop_feed(struct dvb_demux_feed *dvbdmxfeed);
@@ -276,7 +272,6 @@ extern int aml_stb_hw_set_source(struct aml_dvb *dvb, dmx_source_t src);
 extern int aml_tso_hw_set_source(struct aml_dvb *dvb, dmx_source_t src);
 
 extern int aml_dmx_set_skipbyte(struct aml_dvb *dvb, int skipbyte);
-extern int aml_dmx_set_demux(struct aml_dvb *dvb, int id);
 extern int aml_dmx_hw_set_dump_ts_select
 		(struct dmx_demux *demux, int dump_ts_select);
 

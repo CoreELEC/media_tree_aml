@@ -231,6 +231,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 #endif
 	meson_dvb.s2p[0].invert = 0;
 	meson_dvb.s2p[1].invert = 0;
+	meson_dvb.demux_irq[2] = -1;
 	for (i = 0; i < TS_IN_COUNT; i++) {
 		meson_dvb.ts[i].mode   = AM_TS_DISABLE;
 		meson_dvb.ts[i].s2p_id = -1;
@@ -238,6 +239,8 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		meson_dvb.fec_reset[i] = 0;
 		meson_dvb.power_ctrl[i] = 0;
 		meson_dvb.lock_led[i] = 0;
+		meson_dvb.demux_irq[i] = -1;
+		meson_dvb.afifo_irq[i] = -1;
 
 		if (np) {
 			snprintf(buf, sizeof(buf), "dtv_demod%d_i2c_adap_id", i);
@@ -453,7 +456,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 					continue;
 				}
 				if (ftm4862_attach(meson_dvb.fe[i], &ftm4862_config, meson_dvb.i2c[i]) == NULL) {
-					dev_info(&pdev->dev, "Failed to find FMT4862 dual tuner!\n");
+					dev_info(&pdev->dev, "Failed to find FTM4862 dual tuner!\n");
 					dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
 					dvb_frontend_detach(meson_dvb.fe[i]);
 					continue;
