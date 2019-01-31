@@ -203,6 +203,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 	const char *str;
 	char buf[32];
 	int s2p_id = 0;
+	int value;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 	struct resource *r;
@@ -258,51 +259,48 @@ static int fe_dvb_probe(struct platform_device *pdev)
 
 		snprintf(buf, sizeof(buf), "ts%d", i);
 		ret = of_property_read_string(pdev->dev.of_node, buf, &str);
-		if (!ret) {
-			int value;
-			if (!strcmp(str, "parallel")) {
-				dev_info(&pdev->dev, "%s: parallel\n", buf);
-				snprintf(buf, sizeof(buf), "p_ts%d", i);
-				meson_dvb.ts[i].mode    = AM_TS_PARALLEL;
-				meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
-			}
-			else if (!strcmp(str, "serial")) {
-				dev_info(&pdev->dev, "%s: serial s2p%d\n", buf, s2p_id);
-				snprintf(buf, sizeof(buf), "s_ts%d", i);
-				meson_dvb.ts[i].mode    = AM_TS_SERIAL;
-				meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
-				meson_dvb.ts[i].s2p_id = s2p_id;
-				s2p_id++;
-			}
-			snprintf(buf, sizeof(buf), "ts%d_control", i);
-			ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
-			if(!ret){
-				dev_info(&pdev->dev, "%s: 0x%x\n", buf, value);
-				meson_dvb.ts[i].control = value;
-			}
-			if(meson_dvb.ts[i].s2p_id != -1){
-				snprintf(buf, sizeof(buf), "ts%d_invert", i);
-				ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
-				if(!ret){
-					dev_info(&pdev->dev, "%s: 0x%x\n", buf, value);
-					meson_dvb.s2p[meson_dvb.ts[i].s2p_id].invert = value;
-				}
-			}
-			meson_dvb.xtal[i] = MXL603_XTAL_16MHz;
-			snprintf(buf, sizeof(buf), "tuner%d_xtal", i);
-			ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
-			if(!ret){
-				if (value == 24)
-					meson_dvb.xtal[i] = MXL603_XTAL_24MHz;
-
-				dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
-			}
-
-		} else {
+		if (ret) {
 			dev_info(&pdev->dev, "No %s config...\n", buf);
 			meson_dvb.i2c[i] = NULL;
 			continue;
 		}
+		if (!strcmp(str, "parallel")) {
+			dev_info(&pdev->dev, "%s: parallel\n", buf);
+			snprintf(buf, sizeof(buf), "p_ts%d", i);
+			meson_dvb.ts[i].mode    = AM_TS_PARALLEL;
+			meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
+		}
+		else if (!strcmp(str, "serial")) {
+			dev_info(&pdev->dev, "%s: serial s2p%d\n", buf, s2p_id);
+			snprintf(buf, sizeof(buf), "s_ts%d", i);
+			meson_dvb.ts[i].mode    = AM_TS_SERIAL;
+			meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
+			meson_dvb.ts[i].s2p_id = s2p_id;
+			s2p_id++;
+		}
+		snprintf(buf, sizeof(buf), "ts%d_control", i);
+		ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
+		if(!ret){
+			dev_info(&pdev->dev, "%s: 0x%x\n", buf, value);
+			meson_dvb.ts[i].control = value;
+		}
+		if(meson_dvb.ts[i].s2p_id != -1){
+			snprintf(buf, sizeof(buf), "ts%d_invert", i);
+			ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
+			if(!ret){
+				dev_info(&pdev->dev, "%s: 0x%x\n", buf, value);
+				meson_dvb.s2p[meson_dvb.ts[i].s2p_id].invert = value;
+			}
+		}
+		meson_dvb.xtal[i] = MXL603_XTAL_16MHz;
+		snprintf(buf, sizeof(buf), "tuner%d_xtal", i);
+		ret = of_property_read_u32(pdev->dev.of_node, buf, &value);
+		if(!ret){
+			if (value == 24)
+				meson_dvb.xtal[i] = MXL603_XTAL_24MHz;
+				dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
+		}
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 		snprintf(buf, sizeof(buf), "demux%d", i);
 		meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, buf);
@@ -402,17 +400,17 @@ static int fe_dvb_probe(struct platform_device *pdev)
 
 	for (i = 0; i <  TS_IN_COUNT; i++) {
 
-		reset_demod(i);
 		meson_dvb.fe[i] = NULL;
 		if (meson_dvb.i2c[i] == NULL)
 			continue;
 
+		reset_demod(i);
 		dev_info(&pdev->dev, "DVB demod detection for i2c-%d (%s)...\n", i2c[i], meson_dvb.i2c[i]->name);
 
 		if (strcmp(str,"wetek-dvb")) {
 			set_external_vol_gpio(&i, 1);
 			reset_demod(i);
-			if (strcmp(str,"magicsee")) {		/* MeCool */
+			if (strcmp(str,"magicsee")) {		/* MeCool, Khadas */
 				if (strcmp(str,"avl6762")) {
 					dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
 					avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;

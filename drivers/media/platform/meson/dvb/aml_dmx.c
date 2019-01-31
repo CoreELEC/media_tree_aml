@@ -71,11 +71,11 @@
 	} while (0)
 
 MODULE_PARM_DESC(debug_dmx, "\n\t\t Enable demux debug information");
-static int debug_dmx=31;
+static int debug_dmx;
 module_param(debug_dmx, int, 0644);
 
 MODULE_PARM_DESC(debug_irq, "\n\t\t Enable demux IRQ debug information");
-static int debug_irq=31;
+static int debug_irq;
 module_param(debug_irq, int, 0644);
 
 static int npids = CHANNEL_COUNT;
@@ -2470,9 +2470,9 @@ void dmx_reset_hw(struct aml_dvb *dvb)
 void dmx_reset_hw_ex(struct aml_dvb *dvb, int reset_irq)
 {
 	int id;
+
 	for (id = 0; id < DMX_DEV_COUNT; id++) {
-pr_dbg("demux:%d afifo:%d init:%d\n", dvb->demux_irq[id], dvb->afifo_irq[id], dvb->dmx[id].init);
-		if (!dvb->dmx[id].init)
+		if (dvb->demux_irq[id] < 0 || !dvb->dmx[id].init)
 			continue;
 		if (reset_irq) {
 			if (dvb->demux_irq[id] >= 0)
@@ -2501,6 +2501,10 @@ pr_dbg("demux:%d afifo:%d init:%d\n", dvb->demux_irq[id], dvb->afifo_irq[id], dv
 
 	for (id = 0; id < DMX_DEV_COUNT; id++) {
 		int times = 0;
+
+		if (dvb->demux_irq[id] < 0)
+			continue;
+
 		while (times++ < 1000000) {
 			if (!(DMX_READ_REG(id, OM_CMD_STATUS) & 0x01))
 				break;
@@ -2512,7 +2516,7 @@ pr_dbg("demux:%d afifo:%d init:%d\n", dvb->demux_irq[id], dvb->afifo_irq[id], dv
 	for (id = 0; id < DMX_DEV_COUNT; id++) {
 		u32 version, data;
 
-		if (!dvb->dmx[id].init)
+		if (dvb->demux_irq[id] < 0 || !dvb->dmx[id].init)
 			continue;
 
 		if (reset_irq) {
@@ -2548,7 +2552,8 @@ pr_dbg("demux:%d afifo:%d init:%d\n", dvb->demux_irq[id], dvb->afifo_irq[id], dv
 		unsigned long base;
 		unsigned long grp_addr[SEC_BUF_GRP_COUNT];
 		int grp_len[SEC_BUF_GRP_COUNT];
-		if (!dvb->dmx[id].init)
+
+		if (dvb->demux_irq[id] < 0 || !dvb->dmx[id].init)
 			continue;
 
 		if (dmx->sec_pages) {
@@ -2630,7 +2635,9 @@ pr_dbg("demux:%d afifo:%d init:%d\n", dvb->demux_irq[id], dvb->afifo_irq[id], dv
 /*Reset the individual demux*/
 void dmx_reset_dmx_hw_ex_unlock(struct aml_dvb *dvb, struct aml_dmx *dmx, int reset_irq)
 {
-pr_dbg("id:%d demux:%d afifo:%d init:%d\n", dmx->id, dvb->demux_irq[dmx->id], dvb->afifo_irq[dmx->id], dmx->init);
+	if (dvb->demux_irq[dmx->id] < 0)
+		return;
+
 	if (!dmx->init)
 		return;
 
@@ -3171,8 +3178,6 @@ static int sf_feed_sf(struct aml_dmx *dmx, struct dvb_demux_feed *feed,
 	case DMX_TYPE_TS:{
 			struct dmxdev_filter *dmxdevfilter =
 							 feed->feed.ts.priv;
-			pr_dbg("[pid:%d] ts_type:%x %x, %x\n",
-				feed->pid, feed->ts_type, dmxdevfilter->params.pes.flags, DMX_USE_SWFILTER);
 			if (!DVR_FEED(feed)) {
 				if (dmxdevfilter->params.pes.
 				    flags & DMX_USE_SWFILTER)
@@ -3546,10 +3551,8 @@ int aml_dmx_hw_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
 	unsigned long flags;
 	int ret = 0, pid = dvbdmxfeed->pid;
-	pr_dbg("adap=%d feed_type=%d setting init: %s pid [%s]: %04x (%04d) at index %d feeds:%d chan:%d\n",
-			dmx->id, dvbdmxfeed->type,
-			dmx->init ? "yes" : "no", dmx->record ? "yes" : "no", dvbdmxfeed->pid,
-			dvbdmxfeed->pid, dvbdmxfeed->index, dmx->feed_count, dmx->chan_count);
+	pr_dbg("dmx%d feed_type=%d pid: %d at index %d\n",
+			dmx->id, dvbdmxfeed->type, dvbdmxfeed->pid, dvbdmxfeed->index);
 
 	spin_lock_irqsave(&dvb->slock, flags);
 
