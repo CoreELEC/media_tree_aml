@@ -1275,7 +1275,6 @@ static int avl6862_diseqc(struct dvb_frontend *fe,
 	struct avl6862_priv *priv = fe->demodulator_priv;
 	int ret;
 
-	dev_info(&priv->i2c->dev, "%s: %s\n", KBUILD_MODNAME, __func__);
 	ret = avl6862_set_dvbmode(fe,SYS_DVBS);
 	if (ret)
 	  return ret;
