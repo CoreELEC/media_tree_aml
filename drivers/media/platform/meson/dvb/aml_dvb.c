@@ -76,7 +76,7 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 	dmx->dump_ts_select = 0;
 
 	dmx->demux.dmx.capabilities 	= (DMX_TS_FILTERING  | DMX_SECTION_FILTERING | DMX_MEMORY_BASED_FILTERING);
-	dmx->demux.filternum 		= dmx->demux.feednum = FILTER_COUNT;
+	dmx->demux.filternum 		= dmx->demux.feednum = FILTER_COUNT - 5;
 	dmx->demux.priv 		= advb;
 	dmx->demux.start_feed 		= aml_dmx_hw_start_feed;
 	dmx->demux.stop_feed 		= aml_dmx_hw_stop_feed;

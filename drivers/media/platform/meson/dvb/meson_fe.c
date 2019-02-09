@@ -242,6 +242,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		meson_dvb.lock_led[i] = 0;
 		meson_dvb.demux_irq[i] = -1;
 		meson_dvb.afifo_irq[i] = -1;
+		meson_dvb.i2c[i] = NULL;
 
 		if (np) {
 			snprintf(buf, sizeof(buf), "dtv_demod%d_i2c_adap_id", i);
