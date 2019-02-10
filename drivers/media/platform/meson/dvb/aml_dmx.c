@@ -3512,12 +3512,30 @@ int aml_dmx_hw_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 	struct aml_dmx *dmx = (struct aml_dmx *)dvbdmxfeed->demux;
 	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
 	unsigned long flags;
-	int ret = 0, pid = dvbdmxfeed->pid;
+	int ret = 0, id = -1, i, pid = dvbdmxfeed->pid;
+
+	spin_lock_irqsave(&dvb->slock, flags);
 	pr_dbg("dmx%d feed_type=%d pid: %d at index %d\n",
 			dmx->id, dvbdmxfeed->type, dvbdmxfeed->pid, dvbdmxfeed->index);
 
-	spin_lock_irqsave(&dvb->slock, flags);
-
+	for (i = SYS_CHAN_COUNT; i < CHANNEL_COUNT; i++) {
+		if (!dmx->channel[i].used) {
+			id = i;
+			break;
+		}
+	}
+	if (id < 0) {
+		for (i = 0; i < CHANNEL_COUNT; i++) {
+			if (!dmx->ch_ignore[i].used) {
+				dmx->ch_ignore[i].used = 1;
+				dmx->ch_ignore[i].pid = pid;
+				dmx->ch_ignore[i].type = dvbdmxfeed->type;
+				dmx->ch_ignore[i].pes_type = dvbdmxfeed->pes_type;
+				pr_dbg("pid: %d added in ignore channel table[%d].\n", pid, i);
+				goto skip;
+			}
+		}
+	}
 	if (!dmx->channel[SYS_CHAN_COUNT].used) {
 		dvbdmxfeed->pid = XPID;
 		ret = dmx_add_feed(dmx, dvbdmxfeed);
@@ -3527,6 +3545,7 @@ int aml_dmx_hw_start_feed(struct dvb_demux_feed *dvbdmxfeed)
 		dvbdmxfeed->priv = (void *)SYS_CHAN_COUNT;
 		ret = dmx_add_feed(dmx, dvbdmxfeed);
 	}
+skip:
 	spin_unlock_irqrestore(&dvb->slock, flags);
 
 	/*handle errors silently*/
@@ -3541,10 +3560,23 @@ int aml_dmx_hw_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 	struct aml_dmx *dmx = (struct aml_dmx *)dvbdmxfeed->demux;
 	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
 	unsigned long flags;
+        int i;
+
+	spin_lock_irqsave(&dvb->slock, flags);
 	pr_dbg("dmx%d feed_type=%d pid: %d at index %d\n",
 			dmx->id, dvbdmxfeed->type, dvbdmxfeed->pid, dvbdmxfeed->index);
 
-	spin_lock_irqsave(&dvb->slock, flags);
+	for (i = 0; i < CHANNEL_COUNT; i++) {
+		if (dmx->ch_ignore[i].used && (dmx->ch_ignore[i].pid == dvbdmxfeed->pid) &&
+			(dmx->ch_ignore[i].type == dvbdmxfeed->type) && (dmx->ch_ignore[i].pes_type == dvbdmxfeed->pes_type)) {
+				dmx->ch_ignore[i].used = 0;
+				dmx->ch_ignore[i].pid = 0;
+				dmx->ch_ignore[i].type = 0;
+				dmx->ch_ignore[i].pes_type = 0;
+				pr_dbg("pid: %d removed from ignore channel table[%d].\n", dvbdmxfeed->pid, i);
+				goto skip;
+		}
+	}
 	if (dvbdmxfeed->pid != XPID)
 		dmx_remove_feed(dmx, dvbdmxfeed);
 	
@@ -3553,6 +3585,7 @@ int aml_dmx_hw_stop_feed(struct dvb_demux_feed *dvbdmxfeed)
 		dvbdmxfeed->priv = (void *)SYS_CHAN_COUNT; 
 		dmx_remove_feed(dmx, dvbdmxfeed);
 	}
+skip:
 	spin_unlock_irqrestore(&dvb->slock, flags);
 
 	return 0;

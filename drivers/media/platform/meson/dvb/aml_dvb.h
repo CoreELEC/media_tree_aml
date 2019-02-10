@@ -106,6 +106,13 @@ struct aml_channel {
 	struct dvb_demux_feed     *dvr_feed;
 };
 
+struct aml_ch_ignore {
+	int                  type;
+	enum dmx_ts_pes	pes_type;
+	int                  pid;
+	int                  used;
+};
+
 struct aml_filter {
 	int                  chan_id;
 	int                  used;
@@ -166,6 +173,7 @@ struct aml_dmx {
 	unsigned long        sub_pages_map;
 	int                  sub_buf_len;
 	struct aml_channel   channel[CHANNEL_COUNT];
+	struct aml_ch_ignore ch_ignore[CHANNEL_COUNT];
 	struct aml_filter    filter[FILTER_COUNT];
 	void                *irq_data;
 	int                  aud_chan;
