@@ -1,7 +1,7 @@
 /*
- * ../../drivers/media/v4l2-core/videobuf-res.c
+ * drivers/amlogic/media/common/v4l_util/videobuf-res.c
  *
- * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
+ * Copyright (C) 2017 Amlogic, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
  *
-*/
+ */
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -21,7 +21,7 @@
 #include <linux/pagemap.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
-#include "videobuf-res.h"
+#include <linux/amlogic/media/v4l_util/videobuf-res.h>
 #include <linux/io.h>
 #include <linux/printk.h>
 
@@ -35,20 +35,20 @@ struct videobuf_res_memory {
 static int debug;
 module_param(debug, int, 0644);
 
-#define pr_dbg(fmt, args...) pr_info(KERN_DEBUG "videobuf-res: " fmt, ## args)
+#define pr_dbg(fmt, args...) pr_info("videobuf-res: " fmt, ## args)
 
 #define MAGIC_RE_MEM 0x123039dc
 #define MAGIC_CHECK(is, should) {					\
 		if (unlikely((is) != (should)))	{			\
 			pr_err("magic mismatch: %x expected %x\n",	\
 						(is), (should));	\
-			BUG();						\
+			WARN_ON(!is);			\
 		}							\
 	}
 
 #define dprintk(level, fmt, arg...) {				\
 		if ((debug) >= (level))					\
-			pr_dbg("vbuf-resource: " fmt , ## arg);		\
+			pr_dbg("vbuf-resource: " fmt, ## arg);		\
 	}
 
 static void *res_alloc(struct videobuf_queue *q, size_t boff,
@@ -58,9 +58,9 @@ static void *res_alloc(struct videobuf_queue *q, size_t boff,
 	struct videobuf_res_privdata *res = NULL;
 	long res_size = 0;
 
-	BUG_ON(!size);
+	WARN_ON(!size);
 
-	BUG_ON(!q->priv_data);
+	WARN_ON(!q->priv_data);
 
 	res  = (struct videobuf_res_privdata *)q->priv_data;
 	MAGIC_CHECK(res->magic, MAGIC_RE_MEM);
@@ -85,7 +85,7 @@ static void res_free(struct videobuf_res_memory *mem)
 	mem->vaddr = NULL;
 	mem->size = 0;
 	mem->phy_addr = 0;
-	return;
+	/*return;*/
 }
 
 static void
@@ -109,7 +109,7 @@ static void videobuf_vm_close(struct vm_area_struct *vma)
 		map, map->count, vma->vm_start, vma->vm_end);
 
 	map->count--;
-	if (0 == map->count) {
+	if (map->count == 0) {
 		struct videobuf_res_memory *mem;
 
 		dprintk(1, "munmap %p q=%p\n", map, q);
@@ -120,7 +120,7 @@ static void videobuf_vm_close(struct vm_area_struct *vma)
 			videobuf_queue_cancel(q);
 
 		for (i = 0; i < VIDEO_MAX_FRAME; i++) {
-			if (NULL == q->bufs[i])
+			if (q->bufs[i] == NULL)
 				continue;
 
 			if (q->bufs[i]->map != map)
@@ -129,9 +129,9 @@ static void videobuf_vm_close(struct vm_area_struct *vma)
 			mem = q->bufs[i]->priv;
 			if (mem) {
 				/* This callback is called only if kernel has
-				   allocated memory and this memory is mmapped.
-				   In this case, memory should be freed,
-				   in order to do memory unmap.
+				 * allocated memory and this memory is mmapped.
+				 * In this case, memory should be freed,
+				 * in order to do memory unmap.
 				 */
 
 				MAGIC_CHECK(mem->magic, MAGIC_RE_MEM);
@@ -180,7 +180,7 @@ static void *__videobuf_to_vaddr(struct videobuf_buffer *buf)
 {
 	struct videobuf_res_memory *mem = buf->priv;
 
-	BUG_ON(!mem);
+	WARN_ON(!mem);
 	MAGIC_CHECK(mem->magic, MAGIC_RE_MEM);
 
 	return mem->vaddr;
@@ -192,7 +192,7 @@ static int __videobuf_iolock(struct videobuf_queue *q,
 {
 	struct videobuf_res_memory *mem = vb->priv;
 
-	BUG_ON(!mem);
+	WARN_ON(!mem);
 	MAGIC_CHECK(mem->magic, MAGIC_RE_MEM);
 
 	switch (vb->memory) {
@@ -240,7 +240,7 @@ static int __videobuf_mmap_mapper(struct videobuf_queue *q,
 	buf->baddr = vma->vm_start;
 
 	mem = buf->priv;
-	BUG_ON(!mem);
+	WARN_ON(!mem);
 	MAGIC_CHECK(mem->magic, MAGIC_RE_MEM);
 
 	mem->size = PAGE_ALIGN(buf->bsize);
@@ -312,7 +312,7 @@ void videobuf_queue_res_init(struct videobuf_queue *q,
 	struct videobuf_res_privdata *res =
 			(struct videobuf_res_privdata *)priv;
 
-	BUG_ON(!res);
+	WARN_ON(!res);
 	MAGIC_CHECK(res->magic, MAGIC_RE_MEM);
 
 	if (res->start >= res->end) {
@@ -321,7 +321,6 @@ void videobuf_queue_res_init(struct videobuf_queue *q,
 	}
 	videobuf_queue_core_init(q, ops, dev, irqlock, type, field, msize,
 		priv, &qops, ext_lock);
-	return;
 }
 EXPORT_SYMBOL_GPL(videobuf_queue_res_init);
 
@@ -329,7 +328,7 @@ resource_size_t videobuf_to_res(struct videobuf_buffer *buf)
 {
 	struct videobuf_res_memory *mem = buf->priv;
 
-	BUG_ON(!mem);
+	WARN_ON(!mem);
 	MAGIC_CHECK(mem->magic, MAGIC_RE_MEM);
 
 	return mem->phy_addr;
@@ -342,7 +341,7 @@ void videobuf_res_free(struct videobuf_queue *q,
 	struct videobuf_res_memory *mem = buf->priv;
 
 	/* mmapped memory can't be freed here, otherwise mmapped region
-	   would be released, while still needed. In this case, the memory
+	 * would be released, while still needed. In this case, the memory
 	   release should happen inside videobuf_vm_close().
 	   So, it should free memory only if the memory were allocated for
 	   read() operation.
@@ -361,7 +360,6 @@ void videobuf_res_free(struct videobuf_queue *q,
 
 	/* read() method */
 	res_free(mem);
-	return;
 }
 EXPORT_SYMBOL_GPL(videobuf_res_free);
 

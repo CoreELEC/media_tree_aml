@@ -1,7 +1,7 @@
 /*
- * ../../drivers/amlogic/video_dev/common/vfutil.c
+ * drivers/amlogic/media/video_processor/video_dev/common/vfutil.c
  *
- * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
+ * Copyright (C) 2017 Amlogic, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
  *
-*/
+ */
 
 #include <linux/version.h>
 #include <linux/kernel.h>
@@ -32,14 +32,14 @@
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/ctype.h>
-#include <linux/amlogic/amports/ptsserv.h>
-#include <linux/amlogic/amports/timestamp.h>
-#include <linux/amlogic/amports/tsync.h>
-#include <linux/amlogic/canvas/canvas.h>
-#include <linux/amlogic/amports/vframe.h>
-#include <linux/amlogic/amports/vframe_provider.h>
-#include <linux/amlogic/amports/amstream.h>
-#include <linux/amlogic/vout/vout_notify.h>
+#include <linux/amlogic/media/frame_sync/ptsserv.h>
+#include <linux/amlogic/media/frame_sync/timestamp.h>
+#include <linux/amlogic/media/frame_sync/tsync.h>
+#include <linux/amlogic/media/canvas/canvas.h>
+#include <linux/amlogic/media/vfm/vframe.h>
+#include <linux/amlogic/media/vfm/vframe_provider.h>
+#include <linux/amlogic/media/utils/amstream.h>
+#include <linux/amlogic/media/vout/vout_notify.h>
 #include <linux/sched.h>
 #include <linux/poll.h>
 #include <linux/clk.h>
@@ -60,7 +60,8 @@ void v4l_reg_provider(struct vframe_provider_s *prov)
 	spin_unlock_irqrestore(&lock, flags);
 }
 
-void v4l_unreg_provider(void){
+void v4l_unreg_provider(void)
+{
 	ulong flags;
 	/* int deinterlace_mode = get_deinterlace_mode(); */
 
@@ -75,6 +76,7 @@ void v4l_unreg_provider(void){
 	spin_unlock_irqrestore(&lock, flags);
 }
 
-const struct vframe_provider_s *v4l_get_vfp(void){
+const struct vframe_provider_s *v4l_get_vfp(void)
+{
 	return vfp;
 }

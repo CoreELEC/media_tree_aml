@@ -21,7 +21,7 @@
 #include "tuner_ftm4862.h"
 #include "c_stb_regs_define.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 static struct clk *dvb_demux_clk_ctl;
 static struct clk *dvb_afifo_clk_ctl;
 static struct clk *dvb_ahbarb0_clk_ctl;
@@ -205,13 +205,13 @@ static int fe_dvb_probe(struct platform_device *pdev)
 	int s2p_id = 0;
 	int value;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 	struct resource *r;
 #endif
         struct device_node *np;
 	meson_dvb.pdev = pdev;
 	meson_dvb.dev  = &pdev->dev;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 	r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "stbtop");
 	meson_dvb.demux_base = devm_ioremap_resource(&pdev->dev, r);
 	if (IS_ERR(meson_dvb.demux_base)) {
@@ -302,7 +302,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 				dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
 		}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 		snprintf(buf, sizeof(buf), "demux%d", i);
 		meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, buf);
 		if (meson_dvb.demux_irq[i] < 0) {
@@ -350,7 +350,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		} else
 			meson_dvb.lock_led[i] = 0;
 	}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 	dvb_demux_clk_ctl = devm_clk_get(&pdev->dev, "demux");
 	dev_dbg(&pdev->dev, "dmx clk ctl = %p\n", dvb_demux_clk_ctl);
 	clk_prepare_enable(dvb_demux_clk_ctl);
@@ -538,7 +538,7 @@ static int meson_dvb_remove(struct platform_device *pdev)
 		gpio_free(meson_dvb.power_ctrl[i]);
 		devm_pinctrl_put(meson_dvb.ts[i].pinctrl);
 	}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 	clk_disable_unprepare(dvb_uparsertop_clk_ctl);
 	clk_disable_unprepare(dvb_ahbarb0_clk_ctl);
 	clk_disable_unprepare(dvb_afifo_clk_ctl);

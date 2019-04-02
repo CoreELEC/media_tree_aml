@@ -1,11 +1,20 @@
 /*
- * pass a frame of amlogic video codec device  to user in style of v4l2
+ * drivers/amlogic/media/video_processor/video_dev/amlvideo.c
+ *
+ * Copyright (C) 2017 Amlogic, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of the BSD Licence, GNU General Public License
- * as published by the Free Software Foundation; either version 2 of the
- * License, or (at your option) any later version
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
  */
+
 #include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
@@ -27,19 +36,20 @@
 #include <linux/kthread.h>
 #include <linux/highmem.h>
 #include <linux/freezer.h>
-#include <media/videobuf-res.h>
+#include <linux/platform_device.h>
+#include <linux/amlogic/media/v4l_util/videobuf-res.h>
 #include <media/videobuf2-core.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 #include <linux/types.h>
-#include <linux/amlogic/canvas/canvas.h>
-#include <linux/amlogic/amports/vframe.h>
-#include <linux/amlogic/amports/vframe_provider.h>
-#include <linux/amlogic/amports/vframe_receiver.h>
-#include <linux/amlogic/ge2d/ge2d.h>
-#include <linux/amlogic/amports/timestamp.h>
+#include <linux/amlogic/media/canvas/canvas.h>
+#include <linux/amlogic/media/vfm/vframe.h>
+#include <linux/amlogic/media/vfm/vframe_provider.h>
+#include <linux/amlogic/media/vfm/vframe_receiver.h>
+#include <linux/amlogic/media/ge2d/ge2d.h>
+#include <linux/amlogic/media/frame_sync/timestamp.h>
 #include <linux/kernel.h>
-#include <linux/amlogic/amports/tsync.h>
+#include <linux/amlogic/media/frame_sync/tsync.h>
 #include "vfp.h"
 #include "amlvideo.h"
 
@@ -49,10 +59,6 @@
 #define AMLVIDEO_DBG(fmt, args...) pr_debug("amlvid:dbg: "fmt"", ## args)
 #define AMLVIDEO_WARN(fmt, args...) pr_warn("amlvid:warn: "fmt"", ## args)
 #define AMLVIDEO_ERR(fmt, args...) pr_err("amlvid:err: "fmt"", ## args)
-
-/* Wake up at about 30 fps */
-#define WAKE_NUMERATOR 30
-#define WAKE_DENOMINATOR 1001
 
 #define AMLVIDEO_MAJOR_VERSION 0
 #define AMLVIDEO_MINOR_VERSION 7
@@ -66,11 +72,8 @@ AMLVIDEO_MINOR_VERSION, AMLVIDEO_RELEASE)
 #define PROVIDER_NAME "amlvideo"
 
 #define AMLVIDEO_POOL_SIZE 16
-static struct vfq_s q_ready;
-static struct vfq_s q_omx;
 /*extern bool omx_secret_mode;*/
-static u8 first_frame;
-static u64 last_pts_us64;
+
 static u32 omx_freerun_index = 0;
 
 #define DUR2PTS(x) ((x) - ((x) >> 4))
@@ -80,13 +83,17 @@ MODULE_DESCRIPTION("pass a frame of amlogic video codec device  to user in style
 MODULE_AUTHOR("amlogic-sh");
 MODULE_LICENSE("GPL");
 /* static u32 vpts_remainder; */
-static unsigned video_nr = 10;
-/* module_param(video_nr, uint, 0644); */
-/* MODULE_PARM_DESC(video_nr, "videoX start number, 10 is defaut"); */
+static unsigned int video_nr_base = 10;
+/* module_param(video_nr_base, uint, 0644); */
+/* MODULE_PARM_DESC(video_nr_base, "videoX start number, 10 is defaut"); */
 
-static unsigned n_devs = 1;
+#ifdef CONFIG_AMLOGIC_MEDIA_MULTI_DEC
+static unsigned int n_devs = 1;
+#else
+static unsigned int n_devs = 1;
+#endif
 
-static unsigned debug;
+static unsigned int debug;
 /* module_param(debug, uint, 0644); */
 /* MODULE_PARM_DESC(debug, "activates debug info"); */
 
@@ -94,81 +101,70 @@ static unsigned int vid_limit = 16;
 module_param(vid_limit, uint, 0644);
 MODULE_PARM_DESC(vid_limit, "capture memory limit in megabytes");
 
-static unsigned int freerun_mode;
-module_param(freerun_mode, uint, 0664);
-MODULE_PARM_DESC(freerun_mode, "av synchronization int kernel");
-
-struct vframe_s *ppmgrvf = NULL;
 static int video_receiver_event_fun(int type, void *data, void*);
-
-/* supported controls */
-static struct v4l2_queryctrl vivi_qctrl[] = {};
 
 #define dprintk(dev, level, fmt, arg...) \
 	v4l2_dbg(level, debug, &dev->v4l2_dev, fmt, ## arg)
 
 /* ------------------------------------------------------------------
- Basic structures
- ------------------------------------------------------------------*/
-
-struct vivi_fmt {
-	char *name;
-	u32 fourcc; /* v4l2 format id */
-	int depth;
-};
+ * Basic structures
+ * ------------------------------------------------------------------
+ */
 
 static struct vivi_fmt formats[] = {
-{
-	.name = "RGB888 (24)",
-	.fourcc = V4L2_PIX_FMT_RGB24, /* 24  RGB-8-8-8 */
-	.depth = 24, }, {
-		.name = "RGBA8888 (32)",
-		.fourcc = V4L2_PIX_FMT_RGB32, /* 24  RGBA-8-8-8-8 */
-	.depth = 32, }, {
-		.name = "12  Y/CbCr 4:2:0", .fourcc = V4L2_PIX_FMT_NV12,
-		.depth = 12, }, {.name = "21  Y/CbCr 4:2:0", .fourcc =
-		V4L2_PIX_FMT_NV21, .depth = 12, }, {
-		.name = "RGB565 (BE)",
-		.fourcc = V4L2_PIX_FMT_RGB565X, /* rrrrrggg gggbbbbb */
-		.depth = 16, },
-#if 0
 	{
-		.name = "BGRA8888 (32)",
-		.fourcc = V4L2_PIX_FMT_BGR32, /* 24  RGBA-8-8-8-8 */
-		.depth = 32,
-	},
-	{
-		.name = "BGR888 (24)",
-		.fourcc = V4L2_PIX_FMT_BGR24, /* 24  BGR-8-8-8 */
+		.name = "RGB888 (24)",
+		.fourcc = V4L2_PIX_FMT_RGB24, /* 24  RGB-8-8-8 */
 		.depth = 24,
 	},
 	{
-		.name = "YUV420P",
-		.fourcc = V4L2_PIX_FMT_YUV420,
+		.name = "RGBA8888 (32)",
+		.fourcc = V4L2_PIX_FMT_RGB32, /* 24  RGBA-8-8-8-8 */
+		.depth = 32,
+	},
+	{
+		.name = "12  Y/CbCr 4:2:0",
+		.fourcc = V4L2_PIX_FMT_NV12,
 		.depth = 12,
 	},
-#endif
+	{
+		.name = "21  Y/CbCr 4:2:0",
+		.fourcc = V4L2_PIX_FMT_NV21,
+		.depth = 12,
+	},
+	{
+		.name = "RGB565 (BE)",
+		.fourcc = V4L2_PIX_FMT_RGB565X, /* rrrrrggg gggbbbbb */
+		.depth = 16,
+	},
 };
 
-struct vframe_s *amlvideo_pool_ready[AMLVIDEO_POOL_SIZE + 1];
-struct vframe_s *amlvideo_pool_omx[AMLVIDEO_POOL_SIZE + 1];
-/* ------------------------------------------------------------------
- *           provider operations
- *-----------------------------------------------------------------*/
 
+/* -----------------------------------------------------------------
+ *           provider operations
+ * -----------------------------------------------------------------
+ */
 static struct vframe_s *amlvideo_vf_peek(void *op_arg)
 {
-	return vfq_peek(&q_ready);
+	struct vivi_dev *dev = (struct vivi_dev *)op_arg;
+
+	return vfq_peek(&dev->q_ready);
 }
 
 static struct vframe_s *amlvideo_vf_get(void *op_arg)
 {
-	return vfq_pop(&q_ready);
+	struct vivi_dev *dev = (struct vivi_dev *)op_arg;
+
+	return vfq_pop(&dev->q_ready);
 }
 
 static void amlvideo_vf_put(struct vframe_s *vf, void *op_arg)
 {
-	vf_put(vf, RECEIVER_NAME);
+	struct vivi_dev *dev = (struct vivi_dev *)op_arg;
+
+	vf_put(vf, dev->vf_receiver_name);
+	vf_notify_provider(dev->vf_receiver_name, VFRAME_EVENT_RECEIVER_PUT,
+					NULL);
 }
 
 static int amlvideo_event_cb(int type, void *data, void *private_data)
@@ -191,7 +187,9 @@ static int amlvideo_vf_states(struct vframe_states *states, void *op_arg)
 {
 	/* unsigned long flags; */
 	/* spin_lock_irqsave(&lock, flags); */
-	int avail_count = vfq_level(&q_ready) + vfq_level(&q_omx);
+	struct vivi_dev *dev = (struct vivi_dev *)op_arg;
+	int avail_count = vfq_level(&dev->q_ready) + vfq_level(&dev->q_omx);
+
 	states->vf_pool_size = AMLVIDEO_POOL_SIZE;
 	states->buf_recycle_num = 0;
 	states->buf_free_num = AMLVIDEO_POOL_SIZE - avail_count;
@@ -201,13 +199,12 @@ static int amlvideo_vf_states(struct vframe_states *states, void *op_arg)
 }
 
 static const struct vframe_operations_s amlvideo_vf_provider = {
-	.peek = amlvideo_vf_peek, .get = amlvideo_vf_get,
-	.put = amlvideo_vf_put, .event_cb = amlvideo_event_cb, .vf_states =
-		amlvideo_vf_states, };
-
-static struct vframe_provider_s amlvideo_vf_prov;
-
-static struct vframe_receiver_s video_vf_recv;
+	.peek = amlvideo_vf_peek,
+	.get = amlvideo_vf_get,
+	.put = amlvideo_vf_put,
+	.event_cb = amlvideo_event_cb,
+	.vf_states = amlvideo_vf_states,
+};
 
 static struct vivi_fmt *get_format(struct v4l2_format *f)
 {
@@ -226,98 +223,40 @@ static struct vivi_fmt *get_format(struct v4l2_format *f)
 	return &formats[k];
 }
 
-struct sg_to_addr {
-	int pos;
-	struct scatterlist *sg;
-};
-
-/* buffer for one video frame */
-struct vivi_buffer {
-	/* common v4l buffer stuff -- must be first */
-	struct videobuf_buffer vb;
-
-	struct vivi_fmt *fmt;
-};
-
-struct vivi_dmaqueue {
-	struct list_head active;
-
-	/* thread for generating video stream*/
-	struct task_struct *kthread;
-	wait_queue_head_t wq;
-};
-
-static LIST_HEAD(vivi_devlist);
-
-struct vivi_dev {
-	struct list_head vivi_devlist;
-	struct v4l2_device v4l2_dev;
-
-	spinlock_t slock;
-	struct mutex mutex;
-	int users;
-
-	/* various device info */
-	struct video_device *vfd;
-
-	struct vivi_dmaqueue vidq;
-
-	/* Control 'registers' */
-	int qctl_regs[ARRAY_SIZE(vivi_qctrl)];
-	struct videobuf_res_privdata *res;
-};
-
-struct vivi_fh {
-	struct vivi_dev *dev;
-
-	/* video capture */
-	struct vivi_fmt *fmt;
-	unsigned int width, height;
-	struct videobuf_queue vb_vidq;
-	unsigned int is_streamed_on;
-
-	enum v4l2_buf_type type;
-};
-
-static int index;
-static int unregFlag;
-static int startFlag;
-unsigned eventparam[4];
-struct mutex vfpMutex;
 static int video_receiver_event_fun(int type, void *data, void *private_data)
 {
 	struct vframe_states states;
+	struct vivi_dev *dev = (struct vivi_dev *)private_data;
+
 	if (type == VFRAME_EVENT_PROVIDER_UNREG) {
-		unregFlag = 1;
-		if (index != 8)
-			mutex_lock(&vfpMutex);
+		if (dev->index != 8)
+			mutex_lock(&dev->vfpMutex);
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_UNREG\n");
-		if (vf_get_receiver(PROVIDER_NAME)) {
+		if (vf_get_receiver(dev->vf_provider_name)) {
 			AMLVIDEO_DBG("unreg:amlvideo\n");
-			vf_unreg_provider(&amlvideo_vf_prov);
+			vf_unreg_provider(&dev->video_vf_prov);
 			omx_secret_mode = false;
 		}
-		first_frame = 0;
-		vfq_init(&q_ready, AMLVIDEO_POOL_SIZE + 1,
-			&amlvideo_pool_ready[0]);
+		dev->first_frame = 0;
+		vfq_init(&dev->q_ready, AMLVIDEO_POOL_SIZE + 1,
+			&dev->amlvideo_pool_ready[0]);
+		vfq_init(&dev->q_omx, AMLVIDEO_POOL_SIZE + 1,
+                                &dev->amlvideo_pool_omx[0]);
 	}
 	if (type == VFRAME_EVENT_PROVIDER_REG) {
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_REG\n");
 
-		if (unregFlag == 0)
-			vf_notify_provider(RECEIVER_NAME,
-						VFRAME_EVENT_RECEIVER_PARAM_SET,
-						(void *)eventparam);
-		ppmgrvf = NULL;
-		first_frame = 0;
-		mutex_unlock(&vfpMutex);
+		dev->vf = NULL;
+		dev->first_frame = 0;
+		dev->frame_num = 0;
+		mutex_unlock(&dev->vfpMutex);
 	} else if (type == VFRAME_EVENT_PROVIDER_QUREY_STATE) {
-		amlvideo_vf_states(&states, NULL);
+		amlvideo_vf_states(&states, dev);
 		if (states.buf_avail_num > 0) {
 			return RECEIVER_ACTIVE;
 		} else {
 			if (vf_notify_receiver(
-				PROVIDER_NAME,
+				dev->vf_provider_name,
 				VFRAME_EVENT_PROVIDER_QUREY_STATE,
 				NULL)
 			== RECEIVER_ACTIVE)
@@ -327,32 +266,67 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 		/*break;*/
 	} else if (type == VFRAME_EVENT_PROVIDER_START) {
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_START\n");
-		if (vf_get_receiver(PROVIDER_NAME)) {
+		if (vf_get_receiver(dev->vf_provider_name)) {
 			struct vframe_receiver_s *aaa = vf_get_receiver(
-				PROVIDER_NAME);
+				dev->vf_provider_name);
 			AMLVIDEO_DBG("aaa->name=%s", aaa->name);
 			omx_secret_mode = true;
-			vfq_init(&q_ready, AMLVIDEO_POOL_SIZE + 1,
-					&amlvideo_pool_ready[0]);
-                        vfq_init(&q_omx, AMLVIDEO_POOL_SIZE + 1,
-                                        &amlvideo_pool_omx[0]);
-			vf_provider_init(&amlvideo_vf_prov, PROVIDER_NAME,
-						&amlvideo_vf_provider, NULL);
-			vf_reg_provider(&amlvideo_vf_prov);
-			vf_notify_receiver(PROVIDER_NAME,
+			vfq_init(&dev->q_ready, AMLVIDEO_POOL_SIZE + 1,
+					&dev->amlvideo_pool_ready[0]);
+			vfq_init(&dev->q_omx, AMLVIDEO_POOL_SIZE + 1,
+                                        &dev->amlvideo_pool_omx[0]);
+			vf_provider_init(&dev->video_vf_prov,
+						dev->vf_provider_name,
+						&amlvideo_vf_provider, dev);
+			vf_reg_provider(&dev->video_vf_prov);
+			vf_notify_receiver(dev->vf_provider_name,
 						VFRAME_EVENT_PROVIDER_START,
 						NULL);
 		}
+	} else if (type == VFRAME_EVENT_PROVIDER_FR_HINT) {
+		vf_notify_receiver(dev->vf_provider_name,
+			VFRAME_EVENT_PROVIDER_FR_HINT, data);
+	} else if (type == VFRAME_EVENT_PROVIDER_FR_END_HINT) {
+		vf_notify_receiver(dev->vf_provider_name,
+		VFRAME_EVENT_PROVIDER_FR_END_HINT, data);
+	} else if (type == VFRAME_EVENT_PROVIDER_RESET) {
+		dev->first_frame = 0;
+		vfq_init(&dev->q_ready, AMLVIDEO_POOL_SIZE + 1,
+			&dev->amlvideo_pool_ready[0]);
+		vfq_init(&dev->q_omx, AMLVIDEO_POOL_SIZE + 1,
+			&dev->amlvideo_pool_omx[0]);
+
+		vf_notify_receiver(dev->vf_provider_name,
+			VFRAME_EVENT_PROVIDER_RESET, data);
 	}
 	return 0;
 }
 
-static const struct vframe_receiver_op_s video_vf_receiver = {.event_cb =
-	video_receiver_event_fun};
+static const struct vframe_receiver_op_s video_vf_receiver = {
+	.event_cb = video_receiver_event_fun
+};
 
 /* ------------------------------------------------------------------
- Videobuf operations
- ------------------------------------------------------------------*/
+ * Videobuf operations
+ * ------------------------------------------------------------------
+ */
+
+static int vidioc_g_parm(struct file *file, void *priv,
+				struct v4l2_streamparm *parms)
+{
+	struct vivi_dev *dev = video_drvdata(file);
+	struct v4l2_amlogic_parm *ap
+		= (struct v4l2_amlogic_parm *)&parms->parm.capture;
+
+	if (parms->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return -EINVAL;
+
+	memset(ap, 0, sizeof(struct v4l2_amlogic_parm));
+	*ap = dev->am_parm;
+
+	return 0;
+}
+
 static int buffer_setup(struct videobuf_queue *vq, unsigned int *count,
 			unsigned int *size)
 {
@@ -361,7 +335,7 @@ static int buffer_setup(struct videobuf_queue *vq, unsigned int *count,
 	struct vivi_fh *fh = (struct vivi_fh *)res->priv;
 	struct vivi_dev *dev = fh->dev;
 	*size = (fh->width * fh->height * fh->fmt->depth) >> 3;
-	if (0 == *count)
+	if (*count == 0)
 		*count = 32;
 
 	while (*size * *count > vid_limit * 1024 * 1024)
@@ -382,7 +356,7 @@ static void free_buffer(struct videobuf_queue *vq, struct vivi_buffer *buf)
 	dprintk(dev, 1, "%s, state: %i\n", __func__, buf->vb.state);
 	videobuf_waiton(vq, &buf->vb, 0, 0);
 	if (in_interrupt())
-		BUG();
+		WARN_ON(1);
 	videobuf_res_free(vq, &buf->vb);
 	dprintk(dev, 1, "free_buffer: freed\n");
 	buf->vb.state = VIDEOBUF_NEEDS_INIT;
@@ -400,9 +374,10 @@ static int buffer_prepare(struct videobuf_queue *vq, struct videobuf_buffer *vb,
 	struct vivi_buffer
 	*buf = container_of(vb, struct vivi_buffer, vb);
 	int rc;
+
 	dprintk(dev, 1, "%s, field=%d\n", __func__, field);
 
-	BUG_ON(NULL == fh->fmt);
+	WARN_ON(fh->fmt == NULL);
 
 	if (fh->width < 48 ||
 		fh->width > NORM_MAXW ||
@@ -411,14 +386,14 @@ static int buffer_prepare(struct videobuf_queue *vq, struct videobuf_buffer *vb,
 		return -EINVAL;
 
 	buf->vb.size = (fh->width * fh->height * fh->fmt->depth) >> 3;
-	if (0 != buf->vb.baddr && buf->vb.bsize < buf->vb.size)
+	if ((buf->vb.baddr != 0) && (buf->vb.bsize < buf->vb.size))
 		return -EINVAL;
 	/* These properties only change when queue is idle, see s_fmt */
 	buf->fmt = fh->fmt;
 	buf->vb.width = fh->width;
 	buf->vb.height = fh->height;
 	buf->vb.field = field;
-	if (VIDEOBUF_NEEDS_INIT == buf->vb.state) {
+	if (buf->vb.state == VIDEOBUF_NEEDS_INIT) {
 		rc = videobuf_iolock(vq, &buf->vb, NULL);
 		if (rc < 0)
 			goto fail;
@@ -439,6 +414,7 @@ static void buffer_queue(struct videobuf_queue *vq, struct videobuf_buffer *vb)
 	struct vivi_fh *fh = (struct vivi_fh *)res->priv;
 	struct vivi_dev *dev = fh->dev;
 	struct vivi_dmaqueue *vidq = &dev->vidq;
+
 	dprintk(dev, 1, "%s\n", __func__);
 	buf->vb.state = VIDEOBUF_QUEUED;
 	list_add_tail(&buf->vb.queue, &vidq->active);
@@ -453,12 +429,16 @@ static void buffer_release(struct videobuf_queue *vq,
 }
 
 static struct videobuf_queue_ops vivi_video_qops = {
-	.buf_setup = buffer_setup, .buf_prepare = buffer_prepare, .buf_queue =
-		buffer_queue, .buf_release = buffer_release, };
+	.buf_setup = buffer_setup,
+	.buf_prepare = buffer_prepare,
+	.buf_queue = buffer_queue,
+	.buf_release = buffer_release,
+};
 
 /* ------------------------------------------------------------------
- IOCTL vidioc handling
- ------------------------------------------------------------------*/
+ * IOCTL vidioc handling
+ * ------------------------------------------------------------------
+ */
 static int vidioc_querycap(struct file *file, void *priv,
 				struct v4l2_capability *cap)
 {
@@ -469,9 +449,11 @@ static int vidioc_querycap(struct file *file, void *priv,
 	strcpy(cap->card, "amlvideo");
 	strlcpy(cap->bus_info, dev->v4l2_dev.name, sizeof(cap->bus_info));
 	cap->version = AMLVIDEO_VERSION;
-	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING
-				| V4L2_CAP_READWRITE;
-	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
+	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE;
+	cap->capabilities = cap->device_caps
+		| V4L2_CAP_DEVICE_CAPS
+		| V4L2_CAP_STREAMING
+		| V4L2_CAP_READWRITE;
 	return 0;
 }
 
@@ -494,6 +476,7 @@ static int vidioc_g_fmt_vid_cap(struct file *file, void *priv,
 				struct v4l2_format *f)
 {
 	struct vivi_fh *fh = priv;
+
 	f->fmt.pix.width = fh->width;
 	f->fmt.pix.height = fh->height;
 	f->fmt.pix.field = fh->vb_vidq.field;
@@ -516,18 +499,6 @@ static int vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 	fh->vb_vidq.field = f->fmt.pix.field;
 	fh->type = f->type;
 
-	eventparam[0] = f->fmt.pix.width;
-	eventparam[1] = f->fmt.pix.height;
-	if (fh->fmt->fourcc == V4L2_PIX_FMT_RGB24)
-		eventparam[2] = (GE2D_FORMAT_S24_BGR | GE2D_LITTLE_ENDIAN);
-	else if (fh->fmt->fourcc == V4L2_PIX_FMT_RGB32)
-		eventparam[2] = (GE2D_FORMAT_S32_ABGR | GE2D_LITTLE_ENDIAN);
-	else if (fh->fmt->fourcc == V4L2_PIX_FMT_RGB565X)
-		eventparam[2] = (GE2D_FORMAT_S16_RGB_565 | GE2D_LITTLE_ENDIAN);
-	else
-		eventparam[2] = (GE2D_FORMAT_M24_NV21 | GE2D_LITTLE_ENDIAN);
-	vf_notify_provider(RECEIVER_NAME, VFRAME_EVENT_RECEIVER_PARAM_SET,
-				(void *)eventparam);
 	return ret;
 }
 
@@ -543,20 +514,6 @@ static int vidioc_s_fmt_vid_cap(struct file *file, void *priv,
 	fh->height = f->fmt.pix.height;
 	fh->vb_vidq.field = f->fmt.pix.field;
 	fh->type = f->type;
-	eventparam[0] = f->fmt.pix.width;
-	eventparam[1] = f->fmt.pix.height;
-	if (fh->fmt->fourcc == V4L2_PIX_FMT_RGB24)
-		eventparam[2] = (GE2D_FORMAT_S24_BGR | GE2D_LITTLE_ENDIAN);
-	else if (fh->fmt->fourcc == V4L2_PIX_FMT_RGB32)
-		eventparam[2] = (GE2D_FORMAT_S32_ABGR | GE2D_LITTLE_ENDIAN);
-	else if (fh->fmt->fourcc == V4L2_PIX_FMT_RGB565X)
-		eventparam[2] = (GE2D_FORMAT_S16_RGB_565 | GE2D_LITTLE_ENDIAN);
-	else if (fh->fmt->fourcc == V4L2_PIX_FMT_NV12)
-		eventparam[2] = (GE2D_FORMAT_M24_NV12 | GE2D_LITTLE_ENDIAN);
-	else if (fh->fmt->fourcc == V4L2_PIX_FMT_NV21)
-		eventparam[2] = (GE2D_FORMAT_M24_NV21 | GE2D_LITTLE_ENDIAN);
-	vf_notify_provider(RECEIVER_NAME, VFRAME_EVENT_RECEIVER_PARAM_SET,
-				(void *)eventparam);
 	return ret;
 }
 
@@ -577,285 +534,99 @@ static int vidioc_querybuf(struct file *file, void *priv, struct v4l2_buffer *p)
 
 static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 {
-	int ret = 0;
-        u32 index;
-	if (omx_secret_mode == true)
+	u32 index;
+	struct vframe_s *vf;
+	struct vivi_dev *dev = video_drvdata(file);
+	while ((vf = vfq_peek(&dev->q_omx)))
 	{
-		if (freerun_mode == 3)
+		index = (u32)vf->pts_us64;
+		if (p->index > index)
 		{
-			struct vframe_s *vf;
-			while ((vf = vfq_peek(&q_omx)))
-			{
-				index = (u32)vf->pts_us64;
-				if (p->index > index)
-				{
-					vf_put(vfq_pop(&q_omx), RECEIVER_NAME);
-					printk("vidioc_qbuf skip: index:%u:%u\n", p->index, index);
-					continue;
-				}
-				else if (p->index == index)
-				{
-					vf = (vfq_pop(&q_omx));
-					if (p->flags & V4L2_BUF_FLAG_DONE)
-						vf_put(vf, RECEIVER_NAME);
-					else
-						vfq_push(&q_ready, vf);
-				}
-				break;
-			}
+			vf_put(vfq_pop(&dev->q_omx), dev->vf_receiver_name);
+			printk("vidioc_qbuf skip: index:%u:%u\n", p->index, index);
+			continue;
 		}
-		return ret;
-	}
-
-	if (ppmgrvf) {
-		vf_put(ppmgrvf, RECEIVER_NAME);
-		vf_notify_provider(RECEIVER_NAME, VFRAME_EVENT_RECEIVER_PUT,
-					NULL);
-	}
-	mutex_unlock(&vfpMutex);
-	return ret;
-}
-
-static u32 current_pts;
-static int freerun_start;
-static int freerun_cleancache_dqbuf(struct v4l2_buffer *p)
-{
-	int ret = 0;
-
-	if (!vf_peek(RECEIVER_NAME)) {
-		/* msleep(10); */
-		usleep_range(9000, 10000);
-		return -EAGAIN;
-	}
-	mutex_lock(&vfpMutex);
-	ppmgrvf = vf_get(RECEIVER_NAME);
-	if (ppmgrvf == NULL) {
-		mutex_unlock(&vfpMutex);
-		return -EAGAIN;
-	}
-	if (startFlag) {
-		current_pts = 0;
-		while (vf_peek(RECEIVER_NAME)) {
-			vf_put(ppmgrvf, RECEIVER_NAME);
-			vf_notify_provider(RECEIVER_NAME,
-						VFRAME_EVENT_RECEIVER_PUT,
-						NULL);
-			ppmgrvf = vf_get(RECEIVER_NAME);
-			if (!ppmgrvf) {
-				mutex_unlock(&vfpMutex);
-				return -EAGAIN;
-			}
-		}
-		freerun_start = 1;
-		startFlag = 0;
-	}
-	if (freerun_start)
-		current_pts += DUR2PTS(ppmgrvf->duration);
-
-	p->index = (ppmgrvf->canvas0Addr & 0xff) - PPMGR_CANVAS_INDEX;
-	p->timestamp.tv_sec = current_pts / 90000;
-	p->timestamp.tv_usec = (current_pts % 90000) * 100 / 9;
-	return ret;
-}
-
-static int freerun_dqbuf(struct v4l2_buffer *p)
-{
-	int ret = 0;
-	u64 pts_us64 = 0;
-	if (omx_secret_mode == true) {
-		if (vfq_level(&q_ready) > AMLVIDEO_POOL_SIZE - 1) {
-			return -EAGAIN;
-		}
-	}
-	if (!vf_peek(RECEIVER_NAME)) {
-		return -EAGAIN;
-	}
-	if (omx_secret_mode != true)
-		mutex_lock(&vfpMutex);
-
-	ppmgrvf = vf_get(RECEIVER_NAME);
-	if (!ppmgrvf) {
-		/* printk("%s, %s, %d\n", __FILE__, __FUNCTION__, __LINE__); */
-		mutex_unlock(&vfpMutex);
-		return -EAGAIN;
-	}
-	if (omx_secret_mode == true) {
-
-//printk("%s, %s, %d %x %llx\n", __FILE__, __FUNCTION__, __LINE__, ppmgrvf->pts, ppmgrvf->pts_us64);
-
-		if (!ppmgrvf->pts_us64)
-			ppmgrvf->pts_us64 = ((u64)ppmgrvf->pts * 100) / 9;
-
-		if (ppmgrvf->pts_us64) {
-			first_frame = 1;
-			pts_us64 = ppmgrvf->pts_us64;
-		} else if (first_frame == 0) {
-			first_frame = 1;
-			pts_us64 = 0;
-		} else {
-			pts_us64 = last_pts_us64
-				+ (DUR2PTS(ppmgrvf->duration))*100/9;
-		}
-		p->timestamp.tv_sec = pts_us64 >> 32;
-		p->timestamp.tv_usec = pts_us64 & 0xFFFFFFFF;
-		last_pts_us64 = pts_us64;
-		p->timecode.type = ppmgrvf->width;
-		p->timecode.flags = ppmgrvf->height;
-
-		if (freerun_mode != 3)
+		else if (p->index == index)
 		{
-			p->index = 0;
-			vfq_push(&q_ready, ppmgrvf);
-			vf_notify_receiver(
-					PROVIDER_NAME,
-					VFRAME_EVENT_PROVIDER_VFRAME_READY,
-					NULL);
+			vf = (vfq_pop(&dev->q_omx));
+			if (p->flags & V4L2_BUF_FLAG_DONE)
+				vf_put(vf, dev->vf_receiver_name);
+			else
+				vfq_push(&dev->q_ready, vf);
 		}
-		else
-		{
-			p->index = omx_freerun_index;
-			ppmgrvf->pts_us64 = omx_freerun_index++;
-			vfq_push(&q_omx, ppmgrvf);
-		}
-		return ret;
+		break;
 	}
-	if (ppmgrvf->pts != 0) {
-		timestamp_vpts_set(ppmgrvf->pts);
-	} else {
-		timestamp_vpts_inc(DUR2PTS(ppmgrvf->duration));
-		ppmgrvf->pts = timestamp_vpts_get();
-	}
-
-	if (!ppmgrvf->pts_us64)
-		ppmgrvf->pts_us64 = ((u64)ppmgrvf->pts * 100) / 9;
-
-	if (unregFlag || startFlag) {
-		if (ppmgrvf->pts == 0)
-			timestamp_vpts_set(timestamp_pcrscr_get());
-		startFlag = 0;
-		unregFlag = 0;
-	}
-	if (!ppmgrvf) {
-		AMLVIDEO_DBG("%s, %s, %d\n", __FILE__, __func__, __LINE__);
-		mutex_unlock(&vfpMutex);
-		return -EAGAIN;
-	}
-	p->index = (ppmgrvf->canvas0Addr & 0xff) - PPMGR_CANVAS_INDEX;
-	p->timestamp.tv_sec = 0;
-	p->timestamp.tv_usec = ppmgrvf->pts_us64;
-	return ret;
+	return 0;
 }
-
-/*
-static int normal_dqbuf(struct v4l2_buffer *p)
-{
-	static int last_pcrscr;
-	int ret = 0;
-	int diff = 0;
-	int a = 0;
-	int b = timestamp_pcrscr_get();
-	if ((!vf_peek(RECEIVER_NAME)) || (last_pcrscr == b)) {
-		pr_debug("%s, %s, %d\n", __FILE__, __func__, __LINE__);
-		usleep_range(9000, 10000);
-		return -EAGAIN;
-	}
-	last_pcrscr = b;
-	mutex_lock(&vfpMutex);
-	ppmgrvf = vf_get(RECEIVER_NAME);
-	if (!ppmgrvf) {
-		pr_debug("%s, %s, %d\n", __FILE__, __func__, __LINE__);
-		mutex_unlock(&vfpMutex);
-		return -EAGAIN;
-	}
-	if (ppmgrvf->pts != 0) {
-		if (abs(timestamp_pcrscr_get() - ppmgrvf->pts) >
-			tsync_vpts_discontinuity_margin()) {
-			tsync_avevent_locked(VIDEO_TSTAMP_DISCONTINUITY,
-				ppmgrvf->pts);
-		} else {
-			timestamp_vpts_set(ppmgrvf->pts);
-		}
-	} else
-		timestamp_vpts_inc(DUR2PTS(ppmgrvf->duration));
-
-	a = timestamp_vpts_get();
-	diff = a - b;
-	if (unregFlag || startFlag) {
-		if (ppmgrvf->pts == 0)
-			timestamp_vpts_set(timestamp_pcrscr_get());
-
-		tsync_avevent_locked(VIDEO_START, timestamp_vpts_get());
-		startFlag = 0;
-		unregFlag = 0;
-		diff = 0;
-	} else if (!freerun_mode) {
-		if (diff > 3600 && diff < 450000) {
-			usleep_range(
-				(diff / 90 - 1) * 1000,
-				(diff / 90) * 1000);
-		} else if (diff < -11520) {
-			int count = (-diff) >> 13;
-			while (count--) {
-				if (!vf_peek(RECEIVER_NAME)) {
-					break;
-				} else {
-					if (ppmgrvf) {
-						vf_put(ppmgrvf, RECEIVER_NAME);
-						vf_notify_provider(
-							RECEIVER_NAME,
-						VFRAME_EVENT_RECEIVER_PUT,
-							NULL);
-					}
-					ppmgrvf = vf_get(RECEIVER_NAME);
-					if (ppmgrvf->pts != 0) {
-						if (
-	abs(timestamp_pcrscr_get() - ppmgrvf->pts) >
-	tsync_vpts_discontinuity_margin()) {
-							tsync_avevent_locked(
-	VIDEO_TSTAMP_DISCONTINUITY,
-								ppmgrvf->pts);
-	} else {
-							timestamp_vpts_set(
-								ppmgrvf->pts);
-						}
-					} else {
-						timestamp_vpts_inc(
-	DUR2PTS(ppmgrvf->duration));
-					}
-				}
-			}
-		}
-	}
-
-	if (!ppmgrvf) {
-		pr_debug("%s, %s, %d\n", __FILE__, __func__, __LINE__);
-		mutex_unlock(&vfpMutex);
-		return -EAGAIN;
-	}
-	p->index = (ppmgrvf->canvas0Addr & 0xff) - PPMGR_CANVAS_INDEX;
-	p->timestamp.tv_sec = 0;
-	p->timestamp.tv_usec = ppmgrvf->duration;
-
-	return ret;
-}
-*/
 
 static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 {
+	struct vivi_dev *dev = video_drvdata(file);
 	int ret = 0;
+	u64 pts_us64 = 0;
+	u64 pts_tmp;
 
-	if (freerun_mode == 1 || freerun_mode == 3) {
-		/* pr_err("amlvideo dqbuf called freerun_mode=1\n"); */
-		ret = freerun_dqbuf(p);
-	} else if (freerun_mode == 2) {
-		/* pr_err("amlvideo dqbuf called freerun_mode=2\n"); */
-		ret = freerun_cleancache_dqbuf(p);
+	if (vfq_level(&dev->q_ready) > AMLVIDEO_POOL_SIZE - 1)
+		return -EAGAIN;
+
+	if (!vf_peek(dev->vf_receiver_name))
+		return -EAGAIN;
+
+	dev->vf = vf_get(dev->vf_receiver_name);
+	if (!dev->vf) {
+		/* printk("%s, %s, %d\n", __FILE__, __FUNCTION__, __LINE__); */
+		mutex_unlock(&dev->vfpMutex);
+		return -EAGAIN;
 	}
-/*	else {
-		/pr_err("amlvideo dqbuf called\n");
-		ret = normal_dqbuf(p);
+
+	if (dev->vf->index == 0xFFFFFFFF) {
+		pr_info("vidioc_dqbuf: Invalid vf\n");
+		return -EAGAIN;
 	}
-*/
+
+	dev->vf->omx_index = dev->frame_num;
+	dev->am_parm.signal_type = dev->vf->signal_type;
+	dev->am_parm.master_display_colour
+		= dev->vf->prop.master_display_colour;
+
+	if (!dev->vf->pts_us64)
+		dev->vf->pts_us64 = ((u64)dev->vf->pts * 100) / 9;
+
+	if (dev->vf->pts_us64) {
+		dev->first_frame = 1;
+		pts_us64 = dev->vf->pts_us64;
+	} else if (dev->first_frame == 0) {
+		dev->first_frame = 1;
+		pts_us64 = 0;
+	} else {
+		pts_tmp = DUR2PTS(dev->vf->duration) * 100;
+		do_div(pts_tmp, 9);
+		pts_us64 = dev->last_pts_us64
+			+ pts_tmp;
+		pts_tmp = pts_us64*9;
+		do_div(pts_tmp, 100);
+		dev->vf->pts = pts_tmp;
+		/*AMLVIDEO_WARN("pts= %d, dev->vf->duration= %d\n",*/
+			/*dev->vf->pts, (DUR2PTS(dev->vf->duration)));*/
+	}
+
+	p->index = omx_freerun_index;
+
+	p->timestamp.tv_sec = pts_us64 >> 32;
+	p->timestamp.tv_usec = pts_us64 & 0xFFFFFFFF;
+	dev->last_pts_us64 = pts_us64;
+	dev->vf->pts_us64 = omx_freerun_index++;
+	vfq_push(&dev->q_omx, dev->vf);
+
+	if ((dev->vf->type & VIDTYPE_COMPRESS) != 0) {
+		p->timecode.type = dev->vf->compWidth;
+		p->timecode.flags = dev->vf->compHeight;
+	} else {
+		p->timecode.type = dev->vf->width;
+		p->timecode.flags = dev->vf->height;
+	}
+	p->sequence = dev->frame_num++;
+
 	return ret;
 }
 
@@ -872,6 +643,7 @@ static int vidioc_streamon(struct file *file, void *priv, enum v4l2_buf_type i)
 {
 	struct vivi_fh *fh = priv;
 	int ret;
+
 	if ((fh->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) || (i != fh->type))
 		return -EINVAL;
 	ret = videobuf_streamon(&fh->vb_vidq);
@@ -884,6 +656,7 @@ static int vidioc_streamoff(struct file *file, void *priv, enum v4l2_buf_type i)
 {
 	struct vivi_fh *fh = priv;
 	int ret;
+
 	if ((fh->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) || (i != fh->type))
 		return -EINVAL;
 	ret = videobuf_streamoff(&fh->vb_vidq);
@@ -897,60 +670,10 @@ static int vidioc_s_std(struct file *file, void *priv, v4l2_std_id i)
 	return 0;
 }
 
-/* --- controls ---------------------------------------------- */
-static int vidioc_queryctrl(struct file *file, void *priv,
-				struct v4l2_queryctrl *qc)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(vivi_qctrl); i++)
-		if (qc->id && qc->id == vivi_qctrl[i].id) {
-			memcpy(qc, &(vivi_qctrl[i]), sizeof(*qc));
-			return 0;
-		}
-
-	return -EINVAL;
-}
-
-static int vidioc_g_ctrl(struct file *file, void *priv,
-				struct v4l2_control *ctrl)
-{
-	struct vivi_fh *fh = priv;
-	struct vivi_dev *dev = fh->dev;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(vivi_qctrl); i++)
-		if (ctrl->id == vivi_qctrl[i].id) {
-			ctrl->value = dev->qctl_regs[i];
-			return 0;
-		}
-
-	return -EINVAL;
-}
-
-static int vidioc_s_ctrl(struct file *file, void *priv,
-				struct v4l2_control *ctrl)
-{
-	struct vivi_fh *fh = priv;
-
-	struct vivi_dev *dev = fh->dev;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(vivi_qctrl); i++)
-		if (ctrl->id == vivi_qctrl[i].id) {
-			if (ctrl->value < vivi_qctrl[i].minimum || ctrl->value
-				> vivi_qctrl[i].maximum) {
-				return -ERANGE;
-			}
-			dev->qctl_regs[i] = ctrl->value;
-			return 0;
-		}
-	return -EINVAL;
-}
-
 /* ------------------------------------------------------------------
- File operations for the device
- ------------------------------------------------------------------*/
+ * File operations for the device
+ * ------------------------------------------------------------------
+ */
 /*extern void get_ppmgr_buf_info(char **start, unsigned int *size);*/
 static int amlvideo_open(struct file *file)
 {
@@ -960,12 +683,10 @@ static int amlvideo_open(struct file *file)
 	struct videobuf_res_privdata *res = NULL;
 	char *bstart = NULL;
 	unsigned int bsize = 0;
-	ppmgrvf = NULL;
-	index = 0;
-	unregFlag = 0;
-	startFlag = 1;
-	freerun_start = 0;
-	mutex_unlock(&vfpMutex);
+
+	dev->vf = NULL;
+	dev->index = 0;
+	mutex_unlock(&dev->vfpMutex);
 	mutex_lock(&dev->mutex);
 	dev->users++;
 	if (dev->users > 1) {
@@ -974,13 +695,13 @@ static int amlvideo_open(struct file *file)
 		return -EBUSY;
 	}
 	res = kzalloc(sizeof(*res), GFP_KERNEL);
-	if ((NULL == res) || (dev->res != NULL)) {
+	if ((res == NULL) || (dev->res != NULL)) {
 		dev->users--;
 		mutex_unlock(&dev->mutex);
 		return -ENOMEM;
 	} else {
 		fh = kzalloc(sizeof(*fh), GFP_KERNEL);
-		if (NULL == fh) {
+		if (fh == NULL) {
 			kfree(res);
 			dev->users--;
 			mutex_unlock(&dev->mutex);
@@ -1035,7 +756,7 @@ static unsigned int amlvideo_poll(struct file *file,
 
 	dprintk(dev, 1, "%s\n", __func__);
 
-	if (V4L2_BUF_TYPE_VIDEO_CAPTURE != fh->type)
+	if (fh->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return POLLERR;
 
 	return videobuf_poll_stream(file, q, wait);
@@ -1045,12 +766,12 @@ static int amlvideo_close(struct file *file)
 {
 	struct vivi_fh *fh = file->private_data;
 	struct vivi_dev *dev = fh->dev;
+
 	videobuf_stop(&fh->vb_vidq);
 	videobuf_mmap_free(&fh->vb_vidq);
 	kfree(fh);
-	index = 8;
-	startFlag = 0;
-	mutex_unlock(&vfpMutex);
+	dev->index = 8;
+	mutex_unlock(&dev->vfpMutex);
 /* if (dev->res) { */
 	kfree(dev->res);
 	dev->res = NULL;
@@ -1082,37 +803,52 @@ static int amlvideo_mmap(struct file *file, struct vm_area_struct *vma)
 }
 
 static const struct v4l2_file_operations amlvideo_fops = {
-	.owner = THIS_MODULE, .open = amlvideo_open,
+	.owner = THIS_MODULE,
+	.open = amlvideo_open,
 	.release = amlvideo_close,
-	.read = amlvideo_read, .poll = amlvideo_poll,
+	.read = amlvideo_read,
+	.poll = amlvideo_poll,
 	.unlocked_ioctl = video_ioctl2, /* V4L2 ioctl handler */
-	.mmap = amlvideo_mmap, };
+	.mmap = amlvideo_mmap,
+};
 
 static const struct v4l2_ioctl_ops amlvideo_ioctl_ops = {
-	.vidioc_querycap = vidioc_querycap, .vidioc_enum_fmt_vid_cap =
-		vidioc_enum_fmt_vid_cap, .vidioc_g_fmt_vid_cap =
-		vidioc_g_fmt_vid_cap, .vidioc_try_fmt_vid_cap =
-		vidioc_try_fmt_vid_cap, .vidioc_s_fmt_vid_cap =
-		vidioc_s_fmt_vid_cap, .vidioc_reqbufs = vidioc_reqbufs,
-	.vidioc_querybuf = vidioc_querybuf, .vidioc_qbuf = vidioc_qbuf,
-	.vidioc_dqbuf = vidioc_dqbuf, .vidioc_s_std = vidioc_s_std,
-	.vidioc_queryctrl = vidioc_queryctrl, .vidioc_g_ctrl = vidioc_g_ctrl,
-	.vidioc_s_ctrl = vidioc_s_ctrl, .vidioc_streamon = vidioc_streamon,
+	.vidioc_querycap = vidioc_querycap,
+	.vidioc_enum_fmt_vid_cap = vidioc_enum_fmt_vid_cap,
+	.vidioc_g_fmt_vid_cap = vidioc_g_fmt_vid_cap,
+	.vidioc_try_fmt_vid_cap = vidioc_try_fmt_vid_cap,
+	.vidioc_s_fmt_vid_cap = vidioc_s_fmt_vid_cap,
+	.vidioc_reqbufs = vidioc_reqbufs,
+	.vidioc_querybuf = vidioc_querybuf,
+	.vidioc_qbuf = vidioc_qbuf,
+	.vidioc_dqbuf = vidioc_dqbuf,
+	.vidioc_s_std = vidioc_s_std,
+	/*.vidioc_queryctrl = vidioc_queryctrl,
+	 *.vidioc_g_ctrl = vidioc_g_ctrl,
+	 *.vidioc_s_ctrl = vidioc_s_ctrl,
+	 */
+	.vidioc_streamon = vidioc_streamon,
 	.vidioc_streamoff = vidioc_streamoff,
 #ifdef CONFIG_VIDEO_V4L1_COMPAT
 	.vidiocgmbuf = vidiocgmbuf,
 #endif
+	.vidioc_g_parm = vidioc_g_parm,
+
 };
 
-static struct video_device amlvideo_template = {.name = "amlvideo", .fops =
-	&amlvideo_fops, .ioctl_ops = &amlvideo_ioctl_ops, .release =
-	video_device_release, .tvnorms = V4L2_STD_525_60,
+static struct video_device amlvideo_template = {
+	.name = "amlvideo",
+	.fops = &amlvideo_fops,
+	.ioctl_ops = &amlvideo_ioctl_ops,
+	.release = video_device_release,
+	.tvnorms = V4L2_STD_525_60,
 /* .current_norm	= V4L2_STD_NTSC_M , */
 };
 
 /* -----------------------------------------------------------------
- Initialization and module stuff
- ------------------------------------------------------------------*/
+ * Initialization and module stuff
+ * -----------------------------------------------------------------
+ */
 
 static int amlvideo_release(void)
 {
@@ -1138,8 +874,9 @@ static int __init amlvideo_create_instance(int inst)
 {
 	struct vivi_dev *dev;
 	struct video_device *vfd;
-	int ret, i;
-	AMLVIDEO_ERR("amlvideo_create_instance called\n");
+	int ret;
+
+	AMLVIDEO_INFO("amlvideo_create_instance called\n");
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
 		return -ENOMEM;
@@ -1148,7 +885,7 @@ static int __init amlvideo_create_instance(int inst)
 		sizeof(dev->v4l2_dev.name),
 		"%s-%03d", AVMLVIDEO_MODULE_NAME, inst);
 
-	AMLVIDEO_ERR("v4l2_dev.name=:%s\n", dev->v4l2_dev.name);
+	AMLVIDEO_INFO("v4l2_dev.name=:%s\n", dev->v4l2_dev.name);
 	ret = v4l2_device_register(NULL, &dev->v4l2_dev);
 
 	if (ret)
@@ -1162,6 +899,7 @@ static int __init amlvideo_create_instance(int inst)
 	/* initialize locks */
 	spin_lock_init(&dev->slock);
 	mutex_init(&dev->mutex);
+	mutex_init(&dev->vfpMutex);
 
 	ret = -ENOMEM;
 	vfd = video_device_alloc();
@@ -1171,30 +909,45 @@ static int __init amlvideo_create_instance(int inst)
 
 	*vfd = amlvideo_template;
 
-	// vfd->debug = debug;
+	vfd->dev_debug = debug;
 	vfd->v4l2_dev = &dev->v4l2_dev;
+	dev->amlvideo_v4l_num = inst * 10 + video_nr_base;
 
 	/* //////////////////////////////////////// */
 	/* vfd->v4l2_dev = &dev->v4l2_dev; */
 	/* //////////////////////////////////////// */
-	ret = video_register_device(vfd, VFL_TYPE_GRABBER, video_nr);
+	ret = video_register_device(vfd, VFL_TYPE_GRABBER,
+				dev->amlvideo_v4l_num);
 
 	if (ret < 0)
 		goto rel_vdev;
 
-	video_set_drvdata(vfd, dev);
+	dev->inst = inst;
+#if 0
+	snprintf(dev->vf_receiver_name, AMLVIDEO_VF_NAME_SIZE,
+		(0) ? RECEIVER_NAME : RECEIVER_NAME ".%x",
+		inst & 0xff);
 
-	/* Set all controls to their default value. */
-	for (i = 0; i < ARRAY_SIZE(vivi_qctrl); i++)
-		dev->qctl_regs[i] = vivi_qctrl[i].default_value;
+	snprintf(dev->vf_provider_name, AMLVIDEO_VF_NAME_SIZE,
+		(0) ? PROVIDER_NAME : PROVIDER_NAME ".%x",
+		inst & 0xff);
+#else
+	memcpy(dev->vf_receiver_name, RECEIVER_NAME, sizeof(RECEIVER_NAME));
+	memcpy(dev->vf_provider_name, PROVIDER_NAME, sizeof(PROVIDER_NAME));
+#endif
+
+	vf_receiver_init(&dev->video_vf_recv,
+			dev->vf_receiver_name,
+			&video_vf_receiver, dev);
+	vf_reg_receiver(&dev->video_vf_recv);
+
+	video_set_drvdata(vfd, dev);
 
 	/* Now that everything is fine, let's add it to device list */
 	list_add_tail(&dev->vivi_devlist, &vivi_devlist);
 
-	if (video_nr != -1)
-		video_nr++;
-
 	dev->vfd = vfd;
+
 	v4l2_info(&dev->v4l2_dev,
 		"V4L2 device registered as %s\n",
 		video_device_node_name(vfd));
@@ -1210,17 +963,17 @@ free_dev: kfree(dev);
 #undef NORM_MAXW
 #undef NORM_MAXH
 /* #define __init */
-/* This routine allocates from 1 to n_devs virtual drivers.
-
- The real maximum number of virtual drivers will depend on how many drivers
- will succeed. This is limited to the maximum number of devices that
- videodev supports, which is equal to VIDEO_NUM_DEVICES.
+/* This routine allocates from 1 to n_devs virtual drivers.*/
+/*
+ *The real maximum number of virtual drivers will depend on how many drivers
+ *will succeed. This is limited to the maximum number of devices that
+ *videodev supports, which is equal to VIDEO_NUM_DEVICES.
  */
 static int __init amlvideo_init(void)
 {
 	int ret = 0, i;
 
-	AMLVIDEO_ERR("amlvideo_init called");
+	AMLVIDEO_INFO("amlvideo_init called");
 	if (n_devs <= 0)
 		n_devs = 1;
 
@@ -1228,7 +981,8 @@ static int __init amlvideo_init(void)
 		ret = amlvideo_create_instance(i);
 		if (ret) {
 			/* If some instantiations succeeded,
-			 * keep driver */
+			 * keep driver
+			 */
 			if (i)
 				ret = 0;
 			break;
@@ -1237,7 +991,8 @@ static int __init amlvideo_init(void)
 
 	if (ret < 0) {
 		/* printk(KERN_INFO "Error %d while
-		 *  loading vivi driver\n", ret); */
+		 *  loading vivi driver\n", ret);
+		 */
 		return ret;
 	}
 
@@ -1248,16 +1003,12 @@ static int __init amlvideo_init(void)
 
 	/* n_devs will reflect the actual number of allocated devices */
 	n_devs = i;
-	mutex_init(&vfpMutex);
-	vf_receiver_init(&video_vf_recv,
-		RECEIVER_NAME, &video_vf_receiver, NULL);
-	vf_reg_receiver(&video_vf_recv);
 	return ret;
 }
 
 static void __exit amlvideo_exit(void)
 {
-	vf_unreg_receiver(&video_vf_recv);
+	/*vf_unreg_receiver(&video_vf_recv);*/
 	amlvideo_release();
 }
 

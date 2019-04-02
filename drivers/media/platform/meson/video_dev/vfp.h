@@ -1,7 +1,7 @@
 /*
- * ../../drivers/amlogic/video_dev/common/vfp.h
+ * drivers/amlogic/media/video_processor/video_dev/common/vfp.h
  *
- * Copyright (C) 2015 Amlogic, Inc. All rights reserved.
+ * Copyright (C) 2017 Amlogic, Inc. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,7 @@
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
  *
-*/
+ */
 
 #ifndef __VFP_H_
 #define __VFP_H_
