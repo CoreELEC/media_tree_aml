@@ -131,13 +131,8 @@ module_param(use_of_sop, int, 0644);
 		} \
 	} while (0)
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-#define READ_PERI_REG			READ_VCBUS_REG
-#define WRITE_PERI_REG			WRITE_VCBUS_REG
-#else
 #define READ_PERI_REG			READ_CBUS_REG
 #define WRITE_PERI_REG			WRITE_CBUS_REG
-#endif
 #define READ_ASYNC_FIFO_REG(i, r)\
 	((i) ? READ_PERI_REG(ASYNC_FIFO2_##r) : READ_PERI_REG(ASYNC_FIFO_##r))
 
@@ -185,13 +180,6 @@ MOD_PARAM_DECLARE_CHANPROC(2);
 
 #define DMX_CH_OP_CHANREC  0
 #define DMX_CH_OP_CHANPROC 1
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)                        
-extern int aml_read_cbus(unsigned int reg);
-extern void aml_write_cbus(unsigned int reg, unsigned int val);
-extern int aml_read_vcbus(unsigned int reg);
-extern void aml_write_vcbus(unsigned int reg, unsigned int val);
-#endif
 
 static inline int _setbit(int v, int b) { return v|(1<<b); }
 static inline int _clrbit(int v, int b) { return v&~(1<<b); }
@@ -312,9 +300,9 @@ static int tsfile_clkdiv = 4;
 #define asyncfifo_get_dev(afifo) ((afifo)->dvb->dev)
 
 /*Section buffer watchdog*/
-static void section_buffer_watchdog_func(struct timer_list *t)
+static void section_buffer_watchdog_func(unsigned long arg)
 {
-	struct aml_dvb *dvb = from_timer(dvb, t, watchdog_timer);
+	struct aml_dvb *dvb = (struct aml_dvb *)arg;
 	struct aml_dmx *dmx;
 	u32 section_busy32 = 0, om_cmd_status32 = 0,
 	    demux_channel_activity32 = 0;
@@ -1523,12 +1511,7 @@ int async_fifo_init(struct aml_asyncfifo *afifo, int initirq,
 			dvr_irq_bh_handler, (unsigned long)afifo);
 	if (initirq) {
 		struct aml_dvb *dvb = afifo->dvb;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 		ret = devm_request_irq(dvb->dev, dvb->afifo_irq[id], dvr_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING, id == 0 ? "afifo0" : "afifo0", afifo);
-#else
-		pr_inf("ts%d irq:%d \n", id, dvb->afifo_irq[id]);
-		ret = request_irq(dvb->afifo_irq[id], dvr_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING, id == 0 ? "dvr0_irq" : "dvr1_irq", afifo);
-#endif
 	}
 	else
 		enable_irq(afifo->dvb->afifo_irq[id]);
@@ -1722,14 +1705,8 @@ static int dmx_init(struct aml_dmx *dmx)
 	if (dvb->demux_irq[dmx->id] >= 0) {
 		tasklet_init(&dmx->dmx_tasklet, dmx_irq_bh_handler, (unsigned long)dmx);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 		ret = devm_request_irq(dvb->dev, dvb->demux_irq[dmx->id], dmx_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING,
 					dmx->id == 0 ? "demux0" : dmx->id == 1 ? "demux1" : "demux2", dmx);
-#else
-		ret = request_irq(dvb->demux_irq[dmx->id], dmx_irq_handler, IRQF_SHARED | IRQF_TRIGGER_RISING,
-					dmx->id == 0 ? "dmx0_irq" : dmx->id == 1 ? "dmx1_irq" : "dmx2_irq", dmx);
-		pr_inf("dmx%d irq:%d \n", dmx->id, dvb->demux_irq[dmx->id]);
-#endif
 	}
 	/*Allocate buffer */
 	if (dmx_alloc_sec_buffer(dmx) < 0)
@@ -1743,8 +1720,12 @@ static int dmx_init(struct aml_dmx *dmx)
 
 	/*Reset the hardware */
 	if (!dvb->dmx_init) {
-		timer_setup(&dvb->watchdog_timer, section_buffer_watchdog_func, 0);
-		mod_timer(&dvb->watchdog_timer, jiffies + msecs_to_jiffies(WATCHDOG_TIMER));
+		init_timer(&dvb->watchdog_timer);
+		dvb->watchdog_timer.function = section_buffer_watchdog_func;
+		dvb->watchdog_timer.expires =
+		    jiffies + msecs_to_jiffies(WATCHDOG_TIMER);
+		dvb->watchdog_timer.data = (unsigned long)dvb;
+		add_timer(&dvb->watchdog_timer);
 		dmx_reset_hw(dvb);
 	}
 
@@ -2455,19 +2436,6 @@ void dmx_reset_hw_ex(struct aml_dvb *dvb, int reset_irq)
 	if (reset_irq)
 		del_timer_sync(&dvb->watchdog_timer);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-/**********************************************************************************************FIXME
-	WRITE_MPEG_REG(RESET1_REGISTER, RESET_DEMUXSTB);
-
-	for (id = 0; id < DMX_DEV_COUNT; id++) {
-		int times = 0;
-		while (times++ < 1000000) {
-			if (!(DMX_READ_REG(id, OM_CMD_STATUS) & 0x01))
-				break;
-		}
-	}
-***************************************************************************************************/
-#else
 	WRITE_MPEG_REG(RESET1_REGISTER, RESET_DEMUXSTB);
 
 	for (id = 0; id < DMX_DEV_COUNT; id++) {
@@ -2481,7 +2449,7 @@ void dmx_reset_hw_ex(struct aml_dvb *dvb, int reset_irq)
 				break;
 		}
 	}
-#endif
+
 	WRITE_MPEG_REG(STB_TOP_CONFIG, 0);
 
 	for (id = 0; id < DMX_DEV_COUNT; id++) {
@@ -2621,20 +2589,10 @@ void dmx_reset_dmx_hw_ex_unlock(struct aml_dvb *dvb, struct aml_dmx *dmx, int re
 		dvb->dmx_watchdog_disable[dmx->id] = 1;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-/****************************************************************************************FIXME
 	WRITE_MPEG_REG(RESET3_REGISTER,
 		       (dmx->id) ? ((dmx->id ==
 				     1) ? RESET_DEMUX1 : RESET_DEMUX2) :
 		       RESET_DEMUX0);
-*********************************************************************************************/
-#else
-	WRITE_MPEG_REG(RESET3_REGISTER,
-		       (dmx->id) ? ((dmx->id ==
-				     1) ? RESET_DEMUX1 : RESET_DEMUX2) :
-		       RESET_DEMUX0);
-#endif
-//	WRITE_MPEG_REG(RESET3_REGISTER, RESET_DES);
 	{
 		int times;
 
@@ -3404,26 +3362,18 @@ static int dmx_remove_feed(struct aml_dmx *dmx, struct dvb_demux_feed *feed)
 
 int aml_dmx_hw_init(struct aml_dmx *dmx)
 {
-	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
-	unsigned long flags;
 	int ret;
 
-	/*Demux initialize */
-	spin_lock_irqsave(&dvb->slock, flags);
 	ret = dmx_init(dmx);
-	spin_unlock_irqrestore(&dvb->slock, flags);
 
 	return ret;
 }
 
 int aml_dmx_hw_deinit(struct aml_dmx *dmx)
 {
-	struct aml_dvb *dvb = (struct aml_dvb *)dmx->demux.priv;
-	unsigned long flags;
 	int ret;
-	spin_lock_irqsave(&dvb->slock, flags);
+
 	ret = dmx_deinit(dmx);
-	spin_unlock_irqrestore(&dvb->slock, flags);
 
 	return ret;
 }
@@ -3444,14 +3394,9 @@ int aml_asyncfifo_hw_init(struct aml_asyncfifo *afifo, int id)
 	afifo->flush_size = ASYNCFIFO_BUFFER_SIZE_DEFAULT / 32;
 
 	/*afifo_reset(0);*/
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-/***********************************************************************************************FIXME
 	WRITE_MPEG_REG(RESET6_REGISTER, (1<<11)|(1<<12));
-****************************************************************************************************/
-#else
-	WRITE_MPEG_REG(RESET6_REGISTER, (1<<11)|(1<<12));
-#endif
 	ret = async_fifo_init(afifo, 1, len, buf, id);
+	pr_dbg("async_fifo_init%d ret%d \n", id, ret);
 
 	if (ret < 0)
 		asyncfifo_free_buffer(buf, len);
@@ -3798,6 +3743,8 @@ int aml_asyncfifo_hw_set_source(struct aml_asyncfifo *afifo,
 
 	spin_lock_irqsave(&dvb->slock, flags);
 
+	pr_dbg("asyncfifo %d set source %d->%d",
+						afifo->id, afifo->source, src);
 	switch (src) {
 	case AM_DMX_0:
 	case AM_DMX_1:

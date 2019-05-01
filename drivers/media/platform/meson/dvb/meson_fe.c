@@ -20,21 +20,21 @@
 #include "mn88436.h"
 #include "tuner_ftm4862.h"
 #include "c_stb_regs_define.h"
+#include <linux/amlogic/cpu_version.h>
+#include "amports_gate.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 static struct clk *dvb_demux_clk_ctl;
 static struct clk *dvb_afifo_clk_ctl;
 static struct clk *dvb_ahbarb0_clk_ctl;
 static struct clk *dvb_uparsertop_clk_ctl;
-static struct reset_control *dvb_demux_reset_ctl;
-static struct reset_control *dvb_async0_reset_ctl;
-static struct reset_control *dvb_dmx0_reset_ctl;
-#else
+EXPORT_SYMBOL(dvb_demux_clk_ctl);
+EXPORT_SYMBOL(dvb_afifo_clk_ctl);
+EXPORT_SYMBOL(dvb_ahbarb0_clk_ctl);
+EXPORT_SYMBOL(dvb_uparsertop_clk_ctl);
 static struct reset_control *dvb_demux_reset_ctl;
 static struct reset_control *dvb_afifo_reset_ctl;
 static struct reset_control *dvb_ahbarb0_reset_ctl;
 static struct reset_control *dvb_uparsertop_reset_ctl;
-#endif
 
 static struct aml_dvb meson_dvb;
 
@@ -167,33 +167,6 @@ void reset_demod(int i)
 	}
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
-                           
-int aml_read_cbus(unsigned int reg)
-{	
-	int val;
-	val = readl(meson_dvb.demux_base + ((reg - STB_VERSION) << 2));
-	return val;
-}
-void aml_write_cbus(unsigned int reg, unsigned int val)
-{
-	writel(val, meson_dvb.demux_base + ((reg - STB_VERSION) << 2));
-}
-int aml_read_vcbus(unsigned int reg)
-{	
-	int val;
-	val = readl(meson_dvb.afifo_base + ((reg - ASYNC_FIFO_REG0) << 2));
-	return val;
-}
-void aml_write_vcbus(unsigned int reg, unsigned int val)
-{
-	writel(val, meson_dvb.afifo_base + ((reg - ASYNC_FIFO_REG0) << 2));
-}
-EXPORT_SYMBOL(aml_read_cbus);
-EXPORT_SYMBOL(aml_write_cbus);
-EXPORT_SYMBOL(aml_read_vcbus);
-EXPORT_SYMBOL(aml_write_vcbus);
-#endif
 
 static int fe_dvb_probe(struct platform_device *pdev)
 {
@@ -205,31 +178,12 @@ static int fe_dvb_probe(struct platform_device *pdev)
 	int s2p_id = 0;
 	int value;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-	struct resource *r;
-#endif
         struct device_node *np;
 	meson_dvb.pdev = pdev;
 	meson_dvb.dev  = &pdev->dev;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-	r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "stbtop");
-	meson_dvb.demux_base = devm_ioremap_resource(&pdev->dev, r);
-	if (IS_ERR(meson_dvb.demux_base)) {
-		dev_err(&pdev->dev, "Couldn't remap STBTOP memory\n");
-		return PTR_ERR(meson_dvb.demux_base);
-	}
- 
-	r = platform_get_resource_byname(pdev, IORESOURCE_MEM, "afifo");
-	meson_dvb.afifo_base = devm_ioremap_resource(&pdev->dev, r);
-	if (IS_ERR(meson_dvb.afifo_base)) {
-		dev_err(&pdev->dev, "Couldn't remap AFIFO memory\n");
-		return PTR_ERR(meson_dvb.afifo_base);
-	}
+
 	np = pdev->dev.of_node;
         i2c[0] = 0;
-#else
-        np = of_find_node_by_name(NULL, "dvbfe");
-#endif
 	meson_dvb.s2p[0].invert = 0;
 	meson_dvb.s2p[1].invert = 0;
 	meson_dvb.demux_irq[2] = -1;
@@ -302,7 +256,6 @@ static int fe_dvb_probe(struct platform_device *pdev)
 				dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
 		}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
 		snprintf(buf, sizeof(buf), "demux%d", i);
 		meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, buf);
 		if (meson_dvb.demux_irq[i] < 0) {
@@ -315,15 +268,6 @@ static int fe_dvb_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "can't find IRQ for asyncfifo%d\n", i);
 			return meson_dvb.afifo_irq[i];
 		}
-#else
-		if (i == 0) {
-			meson_dvb.demux_irq[i] = INT_DEMUX;
-			meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO_FLUSH;
-		} else {
-			meson_dvb.demux_irq[i] = INT_DEMUX_1;
-			meson_dvb.afifo_irq[i] = INT_ASYNC_FIFO2_FLUSH;
-		}
-#endif
 		if (i == 0) {
 			meson_dvb.fec_reset[0] = of_get_named_gpio_flags(pdev->dev.of_node, "fec_reset_gpio-gpios", 0, NULL);
 			meson_dvb.power_ctrl[0] = of_get_named_gpio_flags(pdev->dev.of_node, "power_ctrl_gpio-gpios", 0, NULL);
@@ -350,55 +294,37 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		} else
 			meson_dvb.lock_led[i] = 0;
 	}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-	dvb_demux_clk_ctl = devm_clk_get(&pdev->dev, "demux");
-	dev_dbg(&pdev->dev, "dmx clk ctl = %p\n", dvb_demux_clk_ctl);
-	clk_prepare_enable(dvb_demux_clk_ctl);
+	if (get_cpu_type() < MESON_CPU_MAJOR_ID_G12A)
+	{
+		dvb_demux_clk_ctl = devm_clk_get(&pdev->dev, "demux");
+		dev_dbg(&pdev->dev, "dmx clk ctl = %p\n", dvb_demux_clk_ctl);
+		clk_prepare_enable(dvb_demux_clk_ctl);
 
-	dvb_afifo_clk_ctl = devm_clk_get(&pdev->dev, "asyncfifo");
-	dev_dbg(&pdev->dev, "asyncfifo clk ctl = %p\n", dvb_afifo_clk_ctl);
-	clk_prepare_enable(dvb_afifo_clk_ctl);
+		dvb_afifo_clk_ctl = devm_clk_get(&pdev->dev, "asyncfifo");
+		dev_dbg(&pdev->dev, "asyncfifo clk ctl = %p\n", dvb_afifo_clk_ctl);
+		clk_prepare_enable(dvb_afifo_clk_ctl);
 	
-	dvb_ahbarb0_clk_ctl = devm_clk_get(&pdev->dev, "ahbarb0");
-	dev_dbg(&pdev->dev, "ahbarb0 clk ctl = %p\n", dvb_ahbarb0_clk_ctl);
-	clk_prepare_enable(dvb_ahbarb0_clk_ctl);
+		dvb_ahbarb0_clk_ctl = devm_clk_get(&pdev->dev, "ahbarb0");
+		dev_dbg(&pdev->dev, "ahbarb0 clk ctl = %p\n", dvb_ahbarb0_clk_ctl);
+		clk_prepare_enable(dvb_ahbarb0_clk_ctl);
 	
-	dvb_uparsertop_clk_ctl = devm_clk_get(&pdev->dev, "uparsertop");
-	dev_dbg(&pdev->dev, "uparsertop clk ctl = %p\n", dvb_uparsertop_clk_ctl);
-	clk_prepare_enable(dvb_uparsertop_clk_ctl);
+		dvb_uparsertop_clk_ctl = devm_clk_get(&pdev->dev, "uparsertop");
+		dev_dbg(&pdev->dev, "uparsertop clk ctl = %p\n", dvb_uparsertop_clk_ctl);
+		clk_prepare_enable(dvb_uparsertop_clk_ctl);
 
-	dvb_demux_reset_ctl = devm_reset_control_get(&pdev->dev, "demux");
-	dev_dbg(&pdev->dev, "dmx rst ctl = %p\n", dvb_demux_reset_ctl);
-	reset_control_deassert(dvb_demux_reset_ctl);
+	}
+	else
+	{
+		amports_switch_gate("demux", 1);
+		amports_switch_gate("ahbarb0", 1);
+		amports_switch_gate("parser_top", 1);
+	}
 
-	dvb_async0_reset_ctl = devm_reset_control_get(&pdev->dev, "async0");
-	dev_dbg(&pdev->dev, "async0 rst ctl = %p\n", dvb_async0_reset_ctl);
-	reset_control_deassert(dvb_async0_reset_ctl);
-	
-	dvb_dmx0_reset_ctl = devm_reset_control_get(&pdev->dev, "demuxreset0");
-	dev_dbg(&pdev->dev, "dmx0 rst ctl = %p\n", dvb_dmx0_reset_ctl);
-	reset_control_deassert(dvb_dmx0_reset_ctl);
-#else
-	dvb_demux_reset_ctl = devm_reset_control_get(&pdev->dev, "demux");
-	dev_dbg(&pdev->dev, "dmx rst ctl = %p\n", dvb_demux_reset_ctl);
-	reset_control_deassert(dvb_demux_reset_ctl);
-
-	dvb_afifo_reset_ctl = devm_reset_control_get(&pdev->dev, "asyncfifo");
-	dev_dbg(&pdev->dev, "asyncfifo rst ctl = %p\n", dvb_afifo_reset_ctl);
-	reset_control_deassert(dvb_afifo_reset_ctl);
-	
-	dvb_ahbarb0_reset_ctl = devm_reset_control_get(&pdev->dev, "ahbarb0");
-	dev_dbg(&pdev->dev, "ahbarb0 rst ctl = %p\n", dvb_ahbarb0_reset_ctl);
-	reset_control_deassert(dvb_ahbarb0_reset_ctl);
-	
-	dvb_uparsertop_reset_ctl = devm_reset_control_get(&pdev->dev, "uparsertop");
-	dev_dbg(&pdev->dev, "uparsertop rst ctl = %p\n", dvb_uparsertop_reset_ctl);
-	reset_control_deassert(dvb_uparsertop_reset_ctl);
-#endif
 	ret = of_property_read_string(pdev->dev.of_node, "dev_name", &str);
 	if (!ret)
 		dev_info(&pdev->dev, "dev_name=%s\n", str);
 
+	meson_dvb.total_nims = 0;
 	for (i = 0; i <  TS_IN_COUNT; i++) {
 
 		meson_dvb.fe[i] = NULL;
@@ -538,17 +464,10 @@ static int meson_dvb_remove(struct platform_device *pdev)
 		gpio_free(meson_dvb.power_ctrl[i]);
 		devm_pinctrl_put(meson_dvb.ts[i].pinctrl);
 	}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
-	clk_disable_unprepare(dvb_uparsertop_clk_ctl);
-	clk_disable_unprepare(dvb_ahbarb0_clk_ctl);
-	clk_disable_unprepare(dvb_afifo_clk_ctl);
-	clk_disable_unprepare(dvb_demux_clk_ctl);
-#else
 	reset_control_assert(dvb_uparsertop_reset_ctl);
 	reset_control_assert(dvb_ahbarb0_reset_ctl);
 	reset_control_assert(dvb_afifo_reset_ctl);
 	reset_control_assert(dvb_demux_reset_ctl);
-#endif
 	return 0;
 }
 static const struct of_device_id meson_dvb_dt_match[] = {

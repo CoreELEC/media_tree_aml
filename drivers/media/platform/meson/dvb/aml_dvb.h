@@ -160,6 +160,8 @@ struct aml_dmx {
 	struct dmx_frontend  hw_fe[DMX_DEV_COUNT];
 	struct dmx_frontend  mem_fe;
 	struct dvb_net       dvb_net;
+	int                  dmx_irq;
+	int                  dvr_irq;
 	struct tasklet_struct     dmx_tasklet;
 	struct tasklet_struct     dvr_tasklet;
 	unsigned long        sec_pages;
@@ -173,8 +175,8 @@ struct aml_dmx {
 	unsigned long        sub_pages_map;
 	int                  sub_buf_len;
 	struct aml_channel   channel[CHANNEL_COUNT];
-	struct aml_ch_ignore ch_ignore[CHANNEL_COUNT];
 	struct aml_filter    filter[FILTER_COUNT];
+	irq_handler_t        irq_handler;
 	void                *irq_data;
 	int                  aud_chan;
 	int                  vid_chan;
@@ -193,6 +195,18 @@ struct aml_dmx {
 	struct aml_dmxtimeout timeout;
 
 	int                  demux_filter_user;
+
+	unsigned long sec_cnt[3];
+	unsigned long sec_cnt_match[3];
+	unsigned long sec_cnt_crc_fail[3];
+	#define SEC_CNT_HW (0)
+	#define SEC_CNT_SW (1)
+	#define SEC_CNT_SS (2)
+	#define SEC_CNT_MAX (3)
+
+	int                   crc_check_count;
+	u32                 crc_check_time;
+	struct aml_ch_ignore ch_ignore[CHANNEL_COUNT];
 };
 
 struct aml_asyncfifo {

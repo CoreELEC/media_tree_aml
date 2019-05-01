@@ -18,6 +18,7 @@
 #include <asm/irq.h>
 #include <linux/uaccess.h>
 #include <linux/poll.h>
+#include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include <linux/of_address.h>
@@ -33,6 +34,8 @@
 #include "aml_dvb.h"
 #include "aml_dvb_reg.h"
 #include "meson_fe.h"
+#include <linux/amlogic/cpu_version.h>
+#include "amports_gate.h"
 
 #define pr_dbg(fmt, args...)\
 	do {\
@@ -50,10 +53,18 @@ module_param(debug_dvb, int, 0644);
 DVB_DEFINE_MOD_OPT_ADAPTER_NR(adapter_nr);
 
 static struct aml_dvb aml_dvb_device;
+#if 0
 static struct reset_control *aml_dvb_demux_reset_ctl;
 static struct reset_control *aml_dvb_afifo_reset_ctl;
 static struct reset_control *aml_dvb_ahbarb0_reset_ctl;
 static struct reset_control *aml_dvb_uparsertop_reset_ctl;
+#else
+/*no used reset ctl,need use clk in 4.9 kernel*/
+extern struct clk *dvb_demux_clk_ctl;
+extern struct clk *dvb_afifo_clk_ctl;
+extern struct clk *dvb_ahbarb0_clk_ctl;
+extern struct clk *dvb_uparsertop_clk_ctl;
+#endif
 extern void dmx_reset_dmx_sw(void);
 
 static void aml_dvb_dmx_release(struct aml_dvb *advb, struct aml_dmx *dmx)
@@ -65,6 +76,33 @@ static void aml_dvb_dmx_release(struct aml_dvb *advb, struct aml_dmx *dmx)
 	dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->hw_fe[dmx->id]);
 	dvb_dmxdev_release(&dmx->dmxdev);
 	dvb_dmx_release(&dmx->demux);
+}
+
+long aml_stb_get_base(int id)
+{
+	int newbase = 0;
+	if (MESON_CPU_MAJOR_ID_TXL < get_cpu_type()
+		&& MESON_CPU_MAJOR_ID_GXLX != get_cpu_type()) {
+		newbase = 1;
+	}
+
+	switch (id) {
+	case ID_STB_CBUS_BASE:
+		return (newbase) ? 0x1800 : 0x1600;
+	case ID_SMARTCARD_REG_BASE:
+		return (newbase) ? 0x9400 : 0x2110;
+	case ID_ASYNC_FIFO_REG_BASE:
+		return (newbase) ? 0x2800 : 0x2310;
+	case ID_ASYNC_FIFO2_REG_BASE:
+		return (newbase) ? 0x2400 : 0x2314;
+	case ID_RESET_BASE:
+		return (newbase) ? 0x0400 : 0x1100;
+	case ID_PARSER_SUB_START_PTR_BASE:
+		return (newbase) ? 0x3800 : 0x2900;
+	default:
+		return 0;
+	}
+	return 0;
 }
 
 static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
@@ -86,7 +124,6 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 		pr_error("dvb_dmx failed: error %d\n",ret);
 		goto error_dmx_init;
 	}
-
 	dmx->dmxdev.filternum = dmx->demux.feednum;
 	dmx->dmxdev.demux = &dmx->demux.dmx;
 	dmx->dmxdev.capabilities = 0;
@@ -101,12 +138,6 @@ static int aml_dvb_dmx_init(struct aml_dvb *advb, struct aml_dmx *dmx, int id)
 		pr_error("adding hw_frontend to dmx failed: error %d",ret);
 		dmx->hw_fe[id].source = 0;
 		goto error_add_hw_fe;
-	}
-
-	dmx->mem_fe.source = DMX_MEMORY_FE;
-	if ((ret = dmx->demux.dmx.add_frontend(&dmx->demux.dmx, &dmx->mem_fe)) < 0) {
-		pr_error("adding mem_frontend to dmx failed: error %d",ret);
-		goto error_add_mem_fe;
 	}
 
 	if ((ret = dmx->demux.dmx.connect_frontend(&dmx->demux.dmx, &dmx->hw_fe[id])) < 0) {
@@ -142,7 +173,6 @@ error_dmx_hw_init:
 error_connect_fe:
 	dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->mem_fe);
 
-error_add_mem_fe:
 error_add_hw_fe:
 	if (dmx->hw_fe[id].source)
 		dmx->demux.dmx.remove_frontend(&dmx->demux.dmx, &dmx->hw_fe[id]);
@@ -184,7 +214,6 @@ int __init aml_dvb_init(void)
 	get_aml_dvb(advb);
 	advb->stb_source = -1;
 	advb->tso_source = -1;
-
 	ret =
 	    dvb_register_adapter(&advb->dvb_adapter, CARD_NAME, THIS_MODULE,
 				 advb->dev, adapter_nr);
@@ -199,6 +228,7 @@ int __init aml_dvb_init(void)
 		if (ret < 0)
 			goto error;
 	}
+
 	/*Init the async fifos */
 	for (i = 0; i < ASYNCFIFO_COUNT; i++) {
 		ret = aml_dvb_asyncfifo_init(advb, &advb->asyncfifo[i], i);
@@ -259,10 +289,19 @@ void __exit aml_dvb_exit(void)
 	}
 
 	/*switch_mod_gate_by_name("demux", 0); */
-	reset_control_assert(aml_dvb_uparsertop_reset_ctl);
-	reset_control_assert(aml_dvb_ahbarb0_reset_ctl);
-	reset_control_assert(aml_dvb_afifo_reset_ctl);					
-	reset_control_assert(aml_dvb_demux_reset_ctl);
+	if (get_cpu_type() < MESON_CPU_MAJOR_ID_G12A)
+	{
+		clk_disable_unprepare(dvb_uparsertop_clk_ctl);
+		clk_disable_unprepare(dvb_ahbarb0_clk_ctl);
+		clk_disable_unprepare(dvb_afifo_clk_ctl);
+		clk_disable_unprepare(dvb_demux_clk_ctl);
+	}
+	else
+	{
+		amports_switch_gate("demux", 0);
+		amports_switch_gate("ahbarb0", 0);
+		amports_switch_gate("parser_top", 0);
+	}
 }
 
 module_init(aml_dvb_init);
