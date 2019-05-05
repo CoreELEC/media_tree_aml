@@ -65,6 +65,7 @@ struct cxd2841er_priv {
 	u8				system;
 	enum cxd2841er_xtal		xtal;
 	enum fe_caps caps;
+	u32				flags;
 };
 
 static const struct cxd2841er_cnr_data s_cn_data[] = {
@@ -883,6 +884,18 @@ static void cxd2841er_set_ts_clock_mode(struct cxd2841er_priv *priv,
 
 	/*
 	 * slave    Bank    Addr    Bit    default    Name
+	 * <SLV-T>  00h     C4h     [1:0]  2'b??      OSERCKMODE
+	 */
+	cxd2841er_set_reg_bits(priv, I2C_SLVT, 0xc4,
+		((priv->flags & CXD2841ER_TS_SERIAL) ? 0x01 : 0x00), 0x03);
+	/*
+	 * slave    Bank    Addr    Bit    default    Name
+	 * <SLV-T>  00h     D1h     [1:0]  2'b??      OSERDUTYMODE
+	 */
+	cxd2841er_set_reg_bits(priv, I2C_SLVT, 0xd1,
+		((priv->flags & CXD2841ER_TS_SERIAL) ? 0x01 : 0x00), 0x03);
+	/*
+	 * slave    Bank    Addr    Bit    default    Name
 	 * <SLV-T>  00h     D9h     [7:0]  8'h08      OTSCKPERIOD
 	 */
 	cxd2841er_write_reg(priv, I2C_SLVT, 0xd9, 0x08);
@@ -896,7 +909,8 @@ static void cxd2841er_set_ts_clock_mode(struct cxd2841er_priv *priv,
 	 * slave    Bank    Addr    Bit    default    Name
 	 * <SLV-T>  00h     33h     [1:0]  2'b01      OREG_CKSEL_TSIF
 	 */
-	cxd2841er_set_reg_bits(priv, I2C_SLVT, 0x33, 0x00, 0x03);
+	cxd2841er_set_reg_bits(priv, I2C_SLVT, 0x33,
+		((priv->flags & CXD2841ER_TS_SERIAL) ? 0x01 : 0x00), 0x03);
 	/*
 	 * Enable TS IF Clock
 	 * slave    Bank    Addr    Bit    default    Name
@@ -3649,7 +3663,8 @@ static int cxd2841er_init_tc(struct dvb_frontend *fe)
 					priv->config->ts_error_polarity ? 0x00 : 0x01, 0x01);
 	cxd2841er_set_reg_bits(priv, I2C_SLVT, 0xC5, 
 					priv->config->clock_polarity ? 0x01 : 0x00, 0x01);
-	cxd2841er_set_reg_bits(priv, I2C_SLVT, 0xc4, 0x00, 0x80);
+	cxd2841er_set_reg_bits(priv, I2C_SLVT, 0xc4,
+		((priv->flags & CXD2841ER_TS_SERIAL) ? 0x80 : 0x00), 0x80);
 
 	cxd2841er_init_stats(fe);
 
@@ -3677,6 +3692,7 @@ static struct dvb_frontend *cxd2841er_attach(struct cxd2841er_config *cfg,
 	priv->i2c_addr_slvx = cfg->i2c_addr + 2;
 	priv->i2c_addr_slvt = cfg->i2c_addr;
 	priv->xtal = cfg->xtal;
+	priv->flags = cfg->flags;
 	priv->frontend.demodulator_priv = priv;
 	dev_info(&priv->i2c->dev,
 		"%s(): I2C adapter %p SLVX addr %x SLVT addr %x\n",
