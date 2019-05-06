@@ -343,17 +343,48 @@ static int fe_dvb_probe(struct platform_device *pdev)
 					avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
 					avl6862cfg.gpio_lock_led = meson_dvb.lock_led[i];
 					meson_dvb.fe[i] = avl6862_attach(&avl6862cfg, meson_dvb.i2c[i]);
-					if (meson_dvb.fe[i] == NULL) {
-						dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
+					if (meson_dvb.fe[i]) {
+						if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
+							dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
+							dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
+							dvb_frontend_detach(meson_dvb.fe[i]);
+							continue;
+						}
+						meson_dvb.total_nims++;
 						continue;
 					}
-					if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
-						dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
-						dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
-						dvb_frontend_detach(meson_dvb.fe[i]);
+					dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
+
+					reset_demod(i);
+					dev_info(&pdev->dev, "Checking for AVL6211 DVB-S/S2 demod ...\n");
+					avl6211cfg[0].mpeg_mode = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+					meson_dvb.fe[i] = avl6211_attach( meson_dvb.i2c[i], &avl6211cfg[0], 0);
+					if (meson_dvb.fe[i]) {
+						meson_dvb.total_nims++;
 						continue;
 					}
-					meson_dvb.total_nims++;
+					dev_info(&pdev->dev, "Failed to find AVL6211 demod!\n");
+
+					reset_demod(i);
+					dev_info(&pdev->dev, "Checking for Sony CXD2841ER DVB-C/T/T2 demod ...\n");
+					cxd2841cfg.flags |= meson_dvb.ts[i].mode  == AM_TS_SERIAL ? CXD2841ER_TS_SERIAL : 0;
+					meson_dvb.fe[i] =  cxd2841er_attach_wetek(&cxd2841cfg, meson_dvb.i2c[i]);
+					if (meson_dvb.fe[i]) {
+						if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl603cfg) == NULL) {
+							dev_info(&pdev->dev, "Failed to find MxL603 tuner!\n");
+							cxd2841cfg.if_agc = 1;
+							cxd2841cfg.ifagc_adc_range = 0x50;
+							if (ascot3_attach(meson_dvb.fe[i], &ascot3cfg, meson_dvb.i2c[i]) == NULL) {
+								dev_info(&pdev->dev, "Failed to find Sony ASCOT3 tuner!\n");
+								dev_info(&pdev->dev, "Detaching Sony CXD2841ER DVB-C/T/T2 frontend!\n");
+								dvb_frontend_detach(meson_dvb.fe[i]);
+								continue;
+							}
+						}
+						meson_dvb.total_nims++;
+						continue;
+					}
+					dev_info(&pdev->dev, "Failed to find Sony CXD2841ER demod!\n");
 					continue;
 				}
 				dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");
