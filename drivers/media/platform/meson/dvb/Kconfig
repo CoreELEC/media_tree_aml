@@ -10,4 +10,11 @@ config MESON_DVB
 	select DVB_CORE
 	help
 		Select to enable Meson dvb drivers.
+config DVB_DS3K
+	tristate "Montage Tehnology TS202x/DS300x/DS3103 based"
+	depends on DVB_CORE && I2C
+	default m if !MEDIA_SUBDRV_AUTOSELECT
+	help
+	  A DVB-S/S2 tuner module. Say Y when you want to support this frontend.
+
 endmenu

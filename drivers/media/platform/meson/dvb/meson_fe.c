@@ -20,6 +20,7 @@
 #include "mn88436.h"
 #include "tuner_ftm4862.h"
 #include "c_stb_regs_define.h"
+#include "ds3k.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 static struct clk *dvb_demux_clk_ctl;
@@ -37,6 +38,12 @@ static struct reset_control *dvb_uparsertop_reset_ctl;
 #endif
 
 static struct aml_dvb meson_dvb;
+
+static struct ds3k_config ds3kcfg = {
+	/* the demodulator's i2c address */
+	.demod_address = 0x6a,
+	.output_mode = MtFeTsOutMode_Serial,
+};
 
 static struct r912_config r912cfg = {
 	.i2c_address = 0x7A,	
@@ -200,6 +207,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 	int i;
 	int ret = 0;
         int i2c[2] = {1, -1};
+        int i2c_addr[2] = {0, 0};
 	const char *str;
 	char buf[32];
 	int s2p_id = 0;
@@ -252,6 +260,10 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		if (i2c[i] < 0)
 			continue;
 
+		if (np) {
+			snprintf(buf, sizeof(buf), "dtv_demod%d_i2c_addr", i);
+			of_property_read_u32(np, buf, &i2c_addr[i]);
+		}
 		meson_dvb.i2c[i] = i2c_get_adapter(i2c[i]);
 		if (meson_dvb.i2c[i] == NULL)
 			continue;
@@ -431,10 +443,23 @@ static int fe_dvb_probe(struct platform_device *pdev)
 					continue;
 				}
 				dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");
-				avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+				avl6762cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+				if (i2c_addr[i])
+					avl6762cfg.demod_address = i2c_addr[i];
 				meson_dvb.fe[i] = avl6862_attach(&avl6762cfg, meson_dvb.i2c[i]);
 				if (meson_dvb.fe[i] == NULL) {
 					dev_info(&pdev->dev, "Failed to find AVL6762 demod!\n");
+					dev_info(&pdev->dev, "Checking for Montage M88DS3XXX DVB-S2 demod ...\n");
+					ds3kcfg.output_mode = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? MtFeTsOutMode_Serial : MtFeTsOutMode_Parallel;
+					if (i2c_addr[i])
+						ds3kcfg.demod_address = i2c_addr[i];
+
+					meson_dvb.fe[i] = ds3k_attach(&ds3kcfg, meson_dvb.i2c[i]);
+					if (meson_dvb.fe[i] == NULL) {
+						dev_info(&pdev->dev, "Failed to find M88DS3XXX demod!\n");
+						continue;
+					}
+					meson_dvb.total_nims++;
 					continue;
 				}
 				mxl608cfg.xtal_freq_hz = meson_dvb.xtal[i];
