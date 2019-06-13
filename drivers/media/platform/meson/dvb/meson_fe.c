@@ -18,6 +18,7 @@
 #include "mxl608.h"
 #include "avl6211.h"
 #include "mn88436.h"
+#include "m88rs6060.h"
 #include "tuner_ftm4862.h"
 #include "c_stb_regs_define.h"
 #include "ds3k.h"
@@ -39,6 +40,12 @@ static struct reset_control *dvb_uparsertop_reset_ctl;
 
 static struct aml_dvb meson_dvb;
 
+static struct m88rs6060_config m88rs6060cfg = {
+	.demod_address = 0x69,
+	.pin_ctrl = 0x82,
+	.ci_mode = 0,
+	.ts_mode = 0,
+};
 static struct ds3k_config ds3kcfg = {
 	/* the demodulator's i2c address */
 	.demod_address = 0x6a,
@@ -208,7 +215,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 	int ret = 0;
         int i2c[2] = {1, -1};
         int i2c_addr[2] = {0, 0};
-	const char *str;
+	const char *str[2];
 	char buf[32];
 	int s2p_id = 0;
 	int value;
@@ -251,6 +258,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		meson_dvb.demux_irq[i] = -1;
 		meson_dvb.afifo_irq[i] = -1;
 		meson_dvb.i2c[i] = NULL;
+		str[i] = NULL;
 
 		if (np) {
 			snprintf(buf, sizeof(buf), "dtv_demod%d_i2c_adap_id", i);
@@ -264,26 +272,30 @@ static int fe_dvb_probe(struct platform_device *pdev)
 			snprintf(buf, sizeof(buf), "dtv_demod%d_i2c_addr", i);
 			of_property_read_u32(np, buf, &i2c_addr[i]);
 		}
-		meson_dvb.i2c[i] = i2c_get_adapter(i2c[i]);
+		if (i2c[0] == i2c[1])
+			meson_dvb.i2c[1] = meson_dvb.i2c[0];
+		else
+			meson_dvb.i2c[i] = i2c_get_adapter(i2c[i]);
+
 		if (meson_dvb.i2c[i] == NULL)
 			continue;
 
 		dev_info(&pdev->dev, "Found i2c-%d adapter: %s\n", i2c[i] , meson_dvb.i2c[i]->name);
 
 		snprintf(buf, sizeof(buf), "ts%d", i);
-		ret = of_property_read_string(pdev->dev.of_node, buf, &str);
+		ret = of_property_read_string(pdev->dev.of_node, buf, &str[i]);
 		if (ret) {
 			dev_info(&pdev->dev, "No %s config...\n", buf);
 			meson_dvb.i2c[i] = NULL;
 			continue;
 		}
-		if (!strcmp(str, "parallel")) {
+		if (!strcmp(str[i], "parallel")) {
 			dev_info(&pdev->dev, "%s: parallel\n", buf);
 			snprintf(buf, sizeof(buf), "p_ts%d", i);
 			meson_dvb.ts[i].mode    = AM_TS_PARALLEL;
 			meson_dvb.ts[i].pinctrl = devm_pinctrl_get_select(&pdev->dev, buf);
 		}
-		else if (!strcmp(str, "serial")) {
+		else if (!strcmp(str[i], "serial")) {
 			dev_info(&pdev->dev, "%s: serial s2p%d\n", buf, s2p_id);
 			snprintf(buf, sizeof(buf), "s_ts%d", i);
 			meson_dvb.ts[i].mode    = AM_TS_SERIAL;
@@ -407,10 +419,17 @@ static int fe_dvb_probe(struct platform_device *pdev)
 	dev_dbg(&pdev->dev, "uparsertop rst ctl = %p\n", dvb_uparsertop_reset_ctl);
 	reset_control_deassert(dvb_uparsertop_reset_ctl);
 #endif
-	ret = of_property_read_string(pdev->dev.of_node, "dev_name", &str);
+	ret = of_property_read_string(pdev->dev.of_node, "dev_name", &str[0]);
 	if (!ret)
-		dev_info(&pdev->dev, "dev_name=%s\n", str);
+		dev_info(&pdev->dev, "dev_name=%s\n", str[0]);
 
+	ret = of_property_read_string(pdev->dev.of_node, "dev_name2", &str[1]);
+	if (!ret)
+		dev_info(&pdev->dev, "dev_name2=%s\n", str[1]);
+	else
+		str[1] = str[0];
+
+	meson_dvb.total_nims = 0;
 	for (i = 0; i <  TS_IN_COUNT; i++) {
 
 		meson_dvb.fe[i] = NULL;
@@ -418,37 +437,34 @@ static int fe_dvb_probe(struct platform_device *pdev)
 			continue;
 
 		reset_demod(i);
-		dev_info(&pdev->dev, "DVB demod detection for i2c-%d (%s)...\n", i2c[i], meson_dvb.i2c[i]->name);
+		dev_info(&pdev->dev, "DVB demod detection for i2c-%d (%s)...%s\n", i2c[i], meson_dvb.i2c[i]->name, str[i]);
 
-		if (strcmp(str,"wetek-dvb")) {
+		if (strcmp(str[i],"wetek-dvb")) {
 			set_external_vol_gpio(&i, 1);
 			reset_demod(i);
-			if (strcmp(str,"magicsee")) {		/* MeCool, Khadas */
-				if (strcmp(str,"avl6762")) {
-					dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
-					avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
-					avl6862cfg.gpio_lock_led = meson_dvb.lock_led[i];
-					meson_dvb.fe[i] = avl6862_attach(&avl6862cfg, meson_dvb.i2c[i]);
-					if (meson_dvb.fe[i] == NULL) {
-						dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
+			if (strcmp(str[i],"magicsee")) {
+				if (strcmp(str[i],"avl6762")) {
+					if (strcmp(str[i],"ds3k")) {		/* MeCool, Khadas */
+						dev_info(&pdev->dev, "Checking for Availink AVL6862 DVB-S2/T2/C demod ...\n");
+						avl6862cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+						avl6862cfg.gpio_fec_reset = meson_dvb.fec_reset[i];
+						avl6862cfg.gpio_power_ctrl = meson_dvb.power_ctrl[i];
+						avl6862cfg.gpio_lock_led = meson_dvb.lock_led[i];
+						meson_dvb.fe[i] = avl6862_attach(&avl6862cfg, meson_dvb.i2c[i]);
+						if (meson_dvb.fe[i] == NULL) {
+							dev_info(&pdev->dev, "Failed to find AVL6862 demod!\n");
+							continue;
+						}
+						if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
+							dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
+							dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
+							dvb_frontend_detach(meson_dvb.fe[i]);
+							meson_dvb.fe[i] = NULL;
+							continue;
+						}
+						meson_dvb.total_nims++;
 						continue;
 					}
-					if (r912_attach(meson_dvb.fe[i], &r912cfg, meson_dvb.i2c[i]) == NULL) {
-						dev_info(&pdev->dev, "Failed to find Rafael R912 tuner!\n");
-						dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
-						dvb_frontend_detach(meson_dvb.fe[i]);
-						continue;
-					}
-					meson_dvb.total_nims++;
-					continue;
-				}
-				dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");
-				avl6762cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
-				if (i2c_addr[i])
-					avl6762cfg.demod_address = i2c_addr[i];
-				meson_dvb.fe[i] = avl6862_attach(&avl6762cfg, meson_dvb.i2c[i]);
-				if (meson_dvb.fe[i] == NULL) {
-					dev_info(&pdev->dev, "Failed to find AVL6762 demod!\n");
 					dev_info(&pdev->dev, "Checking for Montage M88DS3XXX DVB-S2 demod ...\n");
 					ds3kcfg.output_mode = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? MtFeTsOutMode_Serial : MtFeTsOutMode_Parallel;
 					if (i2c_addr[i])
@@ -462,11 +478,33 @@ static int fe_dvb_probe(struct platform_device *pdev)
 					meson_dvb.total_nims++;
 					continue;
 				}
+				dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");
+				avl6762cfg.ts_serial = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 1 : 0;
+				avl6762cfg.gpio_fec_reset = meson_dvb.fec_reset[i];
+				avl6762cfg.gpio_power_ctrl = meson_dvb.power_ctrl[i];
+				if (i2c_addr[i])
+					avl6762cfg.demod_address = i2c_addr[i];
+				meson_dvb.fe[i] = avl6862_attach(&avl6762cfg, meson_dvb.i2c[i]);
+				if (meson_dvb.fe[i] == NULL) {
+					dev_info(&pdev->dev, "Failed to find AVL6762 demod!\n");
+					dev_info(&pdev->dev, "Checking for Montage M88RS6060 DVB-S2 demod ...\n");
+					if (i2c_addr[i])
+						m88rs6060cfg.demod_address = i2c_addr[i];
+
+					meson_dvb.fe[i] = m88rs6060_attach(&m88rs6060cfg, meson_dvb.i2c[i]);
+					if (meson_dvb.fe[i] == NULL) {
+						dev_info(&pdev->dev, "Failed to find M88RS6060 demod!\n");
+						continue;
+					}
+					meson_dvb.total_nims++;
+					continue;
+				}
 				mxl608cfg.xtal_freq_hz = meson_dvb.xtal[i];
 				if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x60, &mxl608cfg) == NULL) {
 					dev_info(&pdev->dev, "Failed to find MxL 608 tuner!\n");
 					dev_info(&pdev->dev, "Detaching Availink AVL6762 frontend!\n");
 					dvb_frontend_detach(meson_dvb.fe[i]);
+					meson_dvb.fe[i] = NULL;
 					continue;
 				}
 				meson_dvb.total_nims++;
@@ -483,7 +521,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 					dev_info(&pdev->dev, "Failed to find FTM4862 dual tuner!\n");
 					dev_info(&pdev->dev, "Detaching Availink AVL6862 frontend!\n");
 					dvb_frontend_detach(meson_dvb.fe[i]);
-					continue;
+					meson_dvb.fe[i] = NULL;
 				}
 				meson_dvb.total_nims++;
 				continue;
@@ -513,6 +551,7 @@ panasonic:
 				dev_info(&pdev->dev, "Failed to find MxL603 tuner!\n");
 				dev_info(&pdev->dev, "Detaching Panasonic MN88436 ATSC frontend!\n");
 				dvb_frontend_detach(meson_dvb.fe[i]);
+				meson_dvb.fe[i] = NULL;
 				goto sony;
 			}
 				
@@ -536,6 +575,7 @@ sony:
 					dev_info(&pdev->dev, "Failed to find Sony ASCOT3 tuner!\n");
 					dev_info(&pdev->dev, "Detaching Sony CXD2841ER DVB-C/T/T2 frontend!\n");
 					dvb_frontend_detach(meson_dvb.fe[i]);
+					meson_dvb.fe[i] = NULL;
 					continue;
 				}
 			}
@@ -560,6 +600,7 @@ static int meson_dvb_remove(struct platform_device *pdev)
 		if (meson_dvb.fe[i] != NULL)
 			dvb_frontend_detach(meson_dvb.fe[i]);
 
+		meson_dvb.fe[i] = NULL;
 		i2c_put_adapter(meson_dvb.i2c[i]);
 		gpio_free(meson_dvb.fec_reset[i]);
 		gpio_free(meson_dvb.power_ctrl[i]);

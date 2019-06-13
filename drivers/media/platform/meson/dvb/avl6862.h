@@ -42,6 +42,8 @@ struct avl6862_config {
 	unsigned char 	eDiseqcStatus;
 	int             ts_serial;
 	int		gpio_lock_led;
+	int		gpio_fec_reset;
+	int		gpio_power_ctrl;
 };
 
 extern struct dvb_frontend *avl6862_attach(struct avl6862_config *config, struct i2c_adapter *i2c);

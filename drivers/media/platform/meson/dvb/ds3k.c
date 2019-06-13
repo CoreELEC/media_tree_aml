@@ -1988,8 +1988,6 @@ struct dvb_frontend *ds3k_attach(const struct ds3k_config *config,
 	struct ds3k_state *state = NULL;
 	int ret;
 	u8 val_00, val_01, val_02, val_b2;
-	int i;
-
 
 	dprintk("%s\n", __func__);
 
@@ -2000,21 +1998,15 @@ struct dvb_frontend *ds3k_attach(const struct ds3k_config *config,
 		goto error2;
 	}
 
-	state->config = config;
+	state->config = (struct ds3k_config *)config;
 	state->i2c = i2c;
 	state->prevUCBS2 = 0;
 	state->dt_addr = 0x42;
 	state->cur_type = SYS_DVBS;
+	ret = ds3k_readreg(state, 0x00) & 0xfe;
 
-	/* check if the demod is present */
-	for(i = 0x68; i <= 0x6b; i++) {
-		state->config->demod_address = i;
-		ret = ds3k_readreg(state, 0x00) & 0xfe;
-		if((ret == 0xE0) || (ret == 0xE8 ))
-			break;
-	}
-	if((i == 0x6b ) && (ret != 0xE0) && (ret != 0xE8 )) {
-		printk(KERN_ERR "Invalid probe, probably not a DS3000\n");
+	if ((ret != 0xE0) && (ret != 0xE2 ) && (ret != 0xE8 )) {
+		printk(KERN_ERR "Invalid probe, probably not a DS3000, ret:0x%02X\n", ret);
 		goto error3;
 	}
 
@@ -2047,6 +2039,12 @@ struct dvb_frontend *ds3k_attach(const struct ds3k_config *config,
 	{
 		state->chip_ID = FeDmdId_DS3103B;
 		printk("\tChip ID = [DS3103B]!\n");
+	}
+	else if((val_02 == 0x01) && (val_01 == 0xA1)
+				&& ((val_b2 & 0xC0) == 0x00) && (val_00 == 0xE2))
+	{
+		state->chip_ID = FeDmdId_DS3103B;
+		printk("\tChip ID = [DS3103C]!\n");
 	}
 	else
 	{

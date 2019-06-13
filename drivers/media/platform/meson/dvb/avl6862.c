@@ -61,7 +61,6 @@ static int avl6862_i2c_rd(struct avl6862_priv *priv, u8 *buf, int len)
 	return ret;
 }
 
-
 static int avl6862_i2c_wr(struct avl6862_priv *priv, u8 *buf, int len)
 {
 	int ret;
@@ -189,8 +188,10 @@ static int avl6862_i2c_rd_reg(struct avl6862_priv *priv,
 	ret |= avl6862_i2c_rd(priv, buf, reg_size);
 
 	*data = 0;
-	p = buf;
+	if (ret)
+		return ret;
 
+	p = buf;
 	switch (reg_size) {
 	case 4:
 		*data |= (u32) (*(p++)) << 24;
@@ -1378,7 +1379,7 @@ static int avl6862_read_status(struct dvb_frontend *fe, enum fe_status *status)
 	struct avl6862_priv *priv = fe->demodulator_priv;
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	int ret = 0;
-	u32 reg = 0, agc, mul, snr = 0;
+	u32 reg = 0, agc, mul = 131, snr = 0;
 	u16 Level;
 	int Percent = 0;
 	int lock_led = priv->config->gpio_lock_led;
@@ -1395,7 +1396,6 @@ static int avl6862_read_status(struct dvb_frontend *fe, enum fe_status *status)
 			ret |= avl6862_RD_REG16(priv,0x400 + rs_DVBC_snr_dB_x100_saddr_offset, &snr);		  
 			if (ret) snr = 0;
 		}
-		mul = 131;
 		break;
 	case SYS_DVBS:
 	case SYS_DVBS2:
@@ -1416,7 +1416,6 @@ static int avl6862_read_status(struct dvb_frontend *fe, enum fe_status *status)
 			ret |= avl6862_RD_REG16(priv,0x800 + rs_DVBTx_snr_dB_x100_saddr_offset, &snr);		  
 			if (ret) snr = 0;
 		}
-		mul = 131;
 		break;
 	default:
 		*status = 0;
@@ -1794,6 +1793,13 @@ static struct dvb_frontend_ops avl6762_ops = {
 	.set_frontend			= avl6862_set_frontend,
 };
 
+void avl6862_reset(int gpio, int i)
+{
+	gpio_direction_output(gpio, i);
+	msleep(200);
+	gpio_direction_output(gpio, 1 - i);
+	msleep(200);
+}
 
 struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 					struct i2c_adapter *i2c)
@@ -1817,6 +1823,7 @@ struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 	priv->g_nChannel_ts_total = 0,
 	priv->delivery_system = -1;
 
+	avl6862_reset(priv->config->gpio_fec_reset, 0);
 	/* get chip id */
 	ret = avl6862_RD_REG32(priv, 0x108000, &id);
 	/* get chip family id */
@@ -1824,12 +1831,12 @@ struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 	if (ret) {
 		dev_err(&priv->i2c->dev, "%s: attach failed reading id",
 				KBUILD_MODNAME);
+
 		goto err1;
 	}
-
 	if (fid != 0x68624955) {
-		dev_err(&priv->i2c->dev, "%s: attach failed family id mismatch",
-				KBUILD_MODNAME);
+		dev_err(&priv->i2c->dev, "%s: attach failed family id mismatch, addr:0x%x, id:0x%x, fid:0x%x",
+			KBUILD_MODNAME, priv->config->demod_address, id, fid);
 		goto err1;
 	}
 	switch (id) {
