@@ -26,6 +26,6 @@
 
 
 void get_aml_dvb(struct aml_dvb *p);
-int set_external_vol_gpio(int *demod_id, int on);
+int set_external_vol_gpio(int demod_id, int on);
 
 #endif /* __MESON_FE__H */
