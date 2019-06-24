@@ -27,16 +27,17 @@
 #include <linux/init.h>
 #include <linux/firmware.h>
 #include <media/dvb_math.h>
+#include <linux/mutex.h>
 #include "m88rs6060.h"
 #include "m88rs6060_priv.h"
 
-static int debug;
-module_param(debug, int, 0644);
-MODULE_PARM_DESC(debug, "Activates frontend debugging (default:0)");
+static int debug_m88rs;
+module_param(debug_m88rs, int, 0644);
+MODULE_PARM_DESC(debug_m88rs, "Activates frontend debugging (default:0)");
 
 #define dprintk(args...) \
 	do { \
-		if (debug) \
+		if (debug_m88rs) \
 			printk(KERN_INFO "m88rs6060: " args); \
 	} while (0)
 
@@ -50,9 +51,7 @@ static int m88rs6060_writereg(struct m88rs6060_state *state, int reg, int data)
 		.flags = 0, .buf = buf, .len = 2 };
 	int ret;
 
-	if (debug > 1)
-		printk("m88rs6060: %s: write reg 0x%02x, value 0x%02x\n",
-			__func__, reg, data);
+	dprintk("%s: write reg 0x%02x, value 0x%02x\n", __func__, reg, data);
 
 	ret = i2c_transfer(state->i2c, &msg, 1);
 	if (ret != 1) {
@@ -82,9 +81,7 @@ static int m88rs6060_readreg(struct m88rs6060_state *state, u8 reg)
 		return ret;
 	}
 
-	if (debug > 1)
-		printk(KERN_INFO "m88rs6060: read reg 0x%02x, value 0x%02x\n",
-			reg, b1[0]);
+	dprintk("read reg 0x%02x, value 0x%02x\n", reg, b1[0]);
 
 	return b1[0];
 }
@@ -155,8 +152,7 @@ static int m88rs6060_writeregN(struct m88rs6060_state *state, int reg,
 	msg.buf = buf;
 	msg.len = len + 1;
 
-	if (debug > 1)
-		printk(KERN_INFO "m88rs6060: %s:  write regN 0x%02x, len = %d\n",
+	dprintk("%s:  write regN 0x%02x, len = %d\n",
 			__func__, reg, len);
 
 	ret = i2c_transfer(state->i2c, &msg, 1);
@@ -286,13 +282,12 @@ static int m88rs6060_set_voltage(struct dvb_frontend *fe, enum fe_sec_voltage vo
 	return 0;
 }
 
-static int m88rs6060_read_status(struct dvb_frontend *fe, enum fe_status* status)
+static int read_status(struct dvb_frontend *fe, enum fe_status* status)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
 	int lock = 0;
 
 	*status = 0;
-
 	switch (state->delivery_system) {
 	case SYS_DVBS:
 		lock = m88rs6060_readreg(state, 0xd1);
@@ -315,7 +310,20 @@ static int m88rs6060_read_status(struct dvb_frontend *fe, enum fe_status* status
 	default:
 		break;
 	}
-	msleep(20);
+	msleep(50);
+
+	return 0;
+}
+
+static int m88rs6060_read_status(struct dvb_frontend *fe, enum fe_status* status)
+{
+	struct m88rs6060_state *state = fe->demodulator_priv;
+	int lock = 0;
+
+	mutex_lock(&state->status_lock);
+	read_status(fe, &state->status);
+	*status = state->status;
+	mutex_unlock(&state->status_lock);
 
 	return 0;
 }
@@ -327,6 +335,7 @@ static int m88rs6060_read_ber(struct dvb_frontend *fe, u32* ber)
 	u32 ldpc_frame_cnt, pre_err_packags;
 
 	dprintk("%s()\n", __func__);
+	mutex_lock(&state->status_lock);
 
 	switch (state->delivery_system) {
 	case SYS_DVBS:
@@ -362,7 +371,8 @@ static int m88rs6060_read_ber(struct dvb_frontend *fe, u32* ber)
 		break;
 	}
 	*ber = state->preBer;
-	msleep(20);
+	mutex_unlock(&state->status_lock);
+//	msleep(20);
 
 	return 0;
 }
@@ -382,11 +392,13 @@ static int m88rs6060_read_signal_strength(struct dvb_frontend *fe,
 	int val;
 
 	dprintk("%s()\n", __func__);
+	mutex_lock(&state->status_lock);
 
 	val = m88rs6060_tuner_readreg(state, 0x5a);
 	RF_GC = val & 0x0f;
 	if (RF_GC >= ARRAY_SIZE(RFGS)) {
 		printk(KERN_ERR "%s: Invalid, RFGC = %d\n", __func__, RF_GC);
+		mutex_unlock(&state->status_lock);
 		return -EINVAL;
 	}
 
@@ -394,6 +406,7 @@ static int m88rs6060_read_signal_strength(struct dvb_frontend *fe,
 	IF_GC = val & 0x0f;
 	if (IF_GC >= ARRAY_SIZE(IFGS)) {
 		printk(KERN_ERR "%s: Invalid, IFGC = %d\n", __func__, IF_GC);
+		mutex_unlock(&state->status_lock);
 		return -EINVAL;
 	}
 
@@ -404,6 +417,7 @@ static int m88rs6060_read_signal_strength(struct dvb_frontend *fe,
 	BB_GC = (val >> 4) & 0x0f;
 	if (BB_GC >= ARRAY_SIZE(BBGS)) {
 		printk(KERN_ERR "%s: Invalid, BBGC = %d\n", __func__, BB_GC);
+		mutex_unlock(&state->status_lock);
 		return -EINVAL;
 	}
 
@@ -435,8 +449,11 @@ static int m88rs6060_read_signal_strength(struct dvb_frontend *fe,
 
 	val = m88rs6060_tuner_readreg(state, 0x96);
 
-	*signal_strength = (RFG + IFG - TIAG + BBG + PGA2G + val) * 9;
-	msleep(20);
+	val += RFG + IFG - TIAG + BBG + PGA2G;
+	
+	*signal_strength = (12000 - clamp_val(val, 1000, 12000)) * 0xffff / (12000 - 1000);
+	mutex_unlock(&state->status_lock);
+//	msleep(20);
 
 	return 0;
 }
@@ -449,6 +466,7 @@ static int m88rs6060_read_snr(struct dvb_frontend *fe, u16 *p_snr)
 	u16 snr = 0;
 
 	dprintk("%s()\n", __func__);
+	mutex_lock(&state->status_lock);
 
 	switch (state->delivery_system) {
 	case SYS_DVBS:
@@ -490,7 +508,8 @@ static int m88rs6060_read_snr(struct dvb_frontend *fe, u16 *p_snr)
 		break;
 	}
 	*p_snr = snr;
-	msleep(20);
+	mutex_unlock(&state->status_lock);
+//	msleep(20);
 
 	return 0;
 }
@@ -501,6 +520,7 @@ static int m88rs6060_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 	u8 tmp1, tmp2, tmp3, data;
 
 	dprintk("%s()\n", __func__);
+	mutex_lock(&state->status_lock);
 
 	switch (state->delivery_system) {
 	case SYS_DVBS:
@@ -531,7 +551,8 @@ static int m88rs6060_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 	default:
 		break;
 	}
-	msleep(20);
+	mutex_unlock(&state->status_lock);
+//	msleep(20);
 
 	return 0;
 }
@@ -578,8 +599,8 @@ static int m88rs6060_send_diseqc_msg(struct dvb_frontend *fe,
 	u8 tmp, time_out;
 
 	/* Dump DiSEqC message */
-	if (debug) {
-		printk(KERN_INFO "m88rs6060: %s(", __func__);
+	if (debug_m88rs) {
+		dprintk("%s(", __func__);
 		for (i = 0 ; i < d->msg_len ;) {
 			printk(KERN_INFO "0x%02x", d->msg[i]);
 			if (++i < d->msg_len)
@@ -713,6 +734,7 @@ struct dvb_frontend *m88rs6060_attach(struct m88rs6060_config *config,
 	state->delivery_system = SYS_DVBS; /* Default set to DVB-S */
 	state->iMclkKHz = 96000;
 	state->kratio = 0;
+	mutex_init(&state->status_lock);
 
 	memcpy(&state->frontend.ops, &m88rs6060_ops,
 			sizeof(struct dvb_frontend_ops));
@@ -1301,7 +1323,7 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	u32 target_mclk = 144000;
 	s32 lpf_offset_KHz;
 	u32 realFreq, freq_MHz;
-	enum fe_status status;
+//	enum fe_status status;
 	int i;
 
 	dprintk("%s() ", __func__);
@@ -1325,6 +1347,7 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	m88rs6060_writereg(state, 0xf5, 0x00);
 
 	/* set mclk */
+	mutex_lock(&state->status_lock);
 	m88rs6060_writereg(state, 0x06, 0xe0);
 	m88rs6060_select_mclk(state, realFreq / 1000, c->symbol_rate / 1000);
 	m88rs6060_set_ts_mclk(state, target_mclk, c->symbol_rate / 1000);
@@ -1342,13 +1365,13 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	m88rs6060_demod_connect(fe, lpf_offset_KHz);
 
 	/* check lock status */
-	for (i = 0; i < 30 ; i++) {
-		m88rs6060_read_status(fe, &status);
-		if (status & FE_HAS_LOCK)
+	for (i = 0; i < 10 ; i++) {
+		read_status(fe, &state->status);
+		if (state->status & FE_HAS_LOCK)
 			break;
-		msleep(20);
+//		msleep(10);
 	}
-
+	
 	m88rs6060_tuner_writereg(state, 0x5b, 0xbc);
 	m88rs6060_tuner_writereg(state, 0x5c, 0xf4);
 	m88rs6060_writereg(state, 0xe6, 0x00);
@@ -1361,12 +1384,13 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	m88rs6060_writereg(state, 0x8a, 0x01);
 
 	state->delivery_system = c->delivery_system;
-
+/*
 	if (status & FE_HAS_LOCK) {
 		if (state->config->set_ts_params)
 			state->config->set_ts_params(fe, 0);
 	}
-
+*/
+	mutex_unlock(&state->status_lock);
 	return 0;
 }
 
@@ -1376,18 +1400,17 @@ static int m88rs6060_tune(struct dvb_frontend *fe,
 			unsigned int *delay,
 			enum fe_status *status)
 {
+	struct m88rs6060_state *state = fe->demodulator_priv;
 	*delay = HZ / 5;
 
 	dprintk("%s() ", __func__);
 	dprintk("re_tune = %d\n", re_tune);
 
-	if (re_tune) {
-		int ret = m88rs6060_set_frontend(fe);
-		if (ret)
-			return ret;
-	}
+	if (re_tune)
+		m88rs6060_set_frontend(fe);
 
-	return m88rs6060_read_status(fe, status);
+	*status = state->status;
+	return 0;
 }
 
 static enum dvbfe_algo m88rs6060_get_algo(struct dvb_frontend *fe)
@@ -1530,16 +1553,15 @@ static int m88rs6060_initilaze(struct dvb_frontend *fe)
 }
 
 static struct dvb_frontend_ops m88rs6060_ops = {
-	.delsys = { SYS_DVBS, SYS_DVBS2 },
-	.info = {
-		.name = "Montage RS6060",
-//		.type = FE_QPSK,
-		.frequency_min_hz =  950 * MHz,
-		.frequency_max_hz = 2150 * MHz,
-		.frequency_stepsize_hz = 1011 * kHz,
+	.delsys	= { SYS_DVBS, SYS_DVBS2 },
+	.info	= {
+		.name			= "Montage RS6060",
+		.frequency_min_hz	=  950 * MHz,
+		.frequency_max_hz	= 2150 * MHz,
+		.frequency_stepsize_hz	= 1011 * kHz,
 		.frequency_tolerance_hz = 5 * MHz,
-		.symbol_rate_min = 1000000,
-		.symbol_rate_max = 45000000,
+		.symbol_rate_min	= 1000000,
+		.symbol_rate_max	= 45000000,
 		.caps = FE_CAN_INVERSION_AUTO |
 			FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 |
 			FE_CAN_FEC_4_5 | FE_CAN_FEC_5_6 | FE_CAN_FEC_6_7 |
@@ -1547,22 +1569,28 @@ static struct dvb_frontend_ops m88rs6060_ops = {
 			FE_CAN_2G_MODULATION |
 			FE_CAN_QPSK | FE_CAN_RECOVER
 	},
+	.tuner_ops = {
+		.info = {
+			.frequency_min_hz = 950 * MHz,
+			.frequency_max_hz = 2150 * MHz
+		},
+	},
 
-	.release = m88rs6060_release,
-	.init = m88rs6060_initfe,
-	.sleep = m88rs6060_sleep,
-	.read_status = m88rs6060_read_status,
-	.read_ber = m88rs6060_read_ber,
-	.read_signal_strength = m88rs6060_read_signal_strength,
-	.read_snr = m88rs6060_read_snr,
-	.read_ucblocks = m88rs6060_read_ucblocks,
-	.set_tone = m88rs6060_set_tone,
-	.set_voltage = m88rs6060_set_voltage,
+	.release		= m88rs6060_release,
+	.init			= m88rs6060_initfe,
+	.sleep			= m88rs6060_sleep,
+	.read_status		= m88rs6060_read_status,
+	.read_ber		= m88rs6060_read_ber,
+	.read_signal_strength	= m88rs6060_read_signal_strength,
+	.read_snr		= m88rs6060_read_snr,
+	.read_ucblocks		= m88rs6060_read_ucblocks,
+	.set_tone		= m88rs6060_set_tone,
+	.set_voltage		= m88rs6060_set_voltage,
 	.diseqc_send_master_cmd = m88rs6060_send_diseqc_msg,
-	.diseqc_send_burst = m88rs6060_diseqc_send_burst,
-	.get_frontend_algo = m88rs6060_get_algo,
-	.tune = m88rs6060_tune,
-	.set_frontend = m88rs6060_set_frontend,
+	.diseqc_send_burst	= m88rs6060_diseqc_send_burst,
+	.get_frontend_algo	= m88rs6060_get_algo,
+	.tune			= m88rs6060_tune,
+	.set_frontend		= m88rs6060_set_frontend,
 };
 
 MODULE_DESCRIPTION("DVB Frontend module for Montage M88RS6060");
