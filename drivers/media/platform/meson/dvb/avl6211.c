@@ -31,7 +31,6 @@
 #include "avl6211_reg.h"
 #include "avl6211.h"
 
-
 const struct avl6211_pllconf pll_conf[] = {
 	/* The following set of PLL configuration at different reference clock frequencies refer to demod operation */
 	/* in standard performance mode. */
@@ -183,7 +182,7 @@ static int avl6211_i2c_read(struct avl6211_state* state, u32 offset, u8 * buf, u
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_write(struct avl6211_state* state, u8 * buf, u16 buf_size)
@@ -270,7 +269,7 @@ static int avl6211_i2c_write(struct avl6211_state* state, u8 * buf, u16 buf_size
 	return 0;
 
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_read16(struct avl6211_state* state, u32 addr, u16 *data)
@@ -287,7 +286,7 @@ static int avl6211_i2c_read16(struct avl6211_state* state, u32 addr, u16 *data)
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_read32(struct avl6211_state* state, u32 addr, u32 *data)
@@ -303,7 +302,7 @@ static int avl6211_i2c_read32(struct avl6211_state* state, u32 addr, u32 *data)
 
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_write16(struct avl6211_state* state, u32 addr, u16 data)
@@ -322,7 +321,7 @@ static int avl6211_i2c_write16(struct avl6211_state* state, u32 addr, u16 data)
 	return 0;
 
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_write32(struct avl6211_state* state, u32 addr, u32 data)
@@ -340,7 +339,7 @@ static int avl6211_i2c_write32(struct avl6211_state* state, u32 addr, u32 data)
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_get_op_status(struct avl6211_state* state)
@@ -359,7 +358,7 @@ static int avl6211_get_op_status(struct avl6211_state* state)
 	
 	return 0;
 err:	
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_send_op(u8 ucOpCmd, struct avl6211_state* state)
@@ -391,7 +390,7 @@ static int avl6211_send_op(u8 ucOpCmd, struct avl6211_state* state)
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_repeater_get_status(struct avl6211_state* state)
@@ -434,7 +433,7 @@ static int avl6211_i2c_repeater_exec(struct avl6211_state* state, u8 * buf, u8 s
 	return 0;
 
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_repeater_send(struct avl6211_state* state, u8 * buf, u16 size)
@@ -469,7 +468,7 @@ static int avl6211_i2c_repeater_send(struct avl6211_state* state, u8 * buf, u16 
 	return 0;
 
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -509,7 +508,7 @@ static int avl6211_i2c_repeater_recv(struct avl6211_state* state, u8 * buf, u16 
 	return 0;
 
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_i2c_repeater_init(u16 bus_clk, struct avl6211_state* state)
@@ -531,7 +530,7 @@ static int avl6211_i2c_repeater_init(u16 bus_clk, struct avl6211_state* state)
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int AV2011_I2C_write(u8 reg_start, u8* buff, u8 len, struct avl6211_state* state)
@@ -541,8 +540,6 @@ static int AV2011_I2C_write(u8 reg_start, u8* buff, u8 len, struct avl6211_state
 	
 	msleep(5);
 	ucTemp[0] = reg_start;
-	ret = avl6211_i2c_repeater_get_status(state);
-	
 	do {
 		ret = avl6211_i2c_repeater_get_status(state);
 		if (ret && 100 < i++) 
@@ -587,7 +584,7 @@ static int av2011_tuner_lock_status(struct dvb_frontend* fe)
 	return 0;
 
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int av2011_lock(struct dvb_frontend* fe)
@@ -660,13 +657,13 @@ static int av2011_lock(struct dvb_frontend* fe)
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int av2011_tuner_reg_init(struct dvb_frontend* fe)
 {
 	struct avl6211_state *state = fe->demodulator_priv;
-    int ret;
+	int ret;
 	
 	u8 reg[50] = { 
 		0x38, 0x00, 0x00, 0x50, 0x1f, 0xa3, 0xfd, 0x58, 0x0e,
@@ -753,7 +750,7 @@ static int av2011_tuner_init(struct dvb_frontend* fe)
 	if (ret)
 		goto err;
 	
-    ret = avl6211_i2c_repeater_init(state->config->tuner_i2c_clock, state);
+	ret = avl6211_i2c_repeater_init(state->config->tuner_i2c_clock, state);
 	if (ret)
 		goto err;
 
@@ -829,7 +826,7 @@ static int avl6211_diseqc_init(struct dvb_frontend* fe)
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_diseqc_switch_mode(struct dvb_frontend* fe)
@@ -860,7 +857,7 @@ static int avl6211_diseqc_switch_mode(struct dvb_frontend* fe)
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_diseqc_get_tx_status(struct dvb_frontend* fe, struct avl6211_diseqc_tx_status * pTxStatus)
@@ -887,7 +884,7 @@ static int avl6211_diseqc_get_tx_status(struct dvb_frontend* fe, struct avl6211_
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_diseqc_send_mod_data(struct dvb_frontend* fe, const u8 * buf, u8 size)
@@ -994,7 +991,7 @@ static int avl6211_diseqc_send_mod_data(struct dvb_frontend* fe, const u8 * buf,
 
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;;
 }
 
@@ -1032,7 +1029,7 @@ static int avl6211_send_diseqc_msg(struct dvb_frontend* fe, struct dvb_diseqc_ma
 
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -1144,7 +1141,7 @@ static int avl6211_diseqc_send_burst(struct dvb_frontend* fe, enum fe_sec_mini_c
 	
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -1189,7 +1186,7 @@ static int avl6211_set_tone(struct dvb_frontend* fe, enum fe_sec_tone_mode tone)
 	
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -1203,7 +1200,7 @@ static int avl6211_set_voltage(struct dvb_frontend *fe,
 	if (voltage == SEC_VOLTAGE_OFF) {
 	
 		if (state->config->set_external_vol_gpio)
-			state->config->set_external_vol_gpio(&state->demod_id, 0);
+			state->config->set_external_vol_gpio(state->demod_id, 0);
 		
 		state->gpio_on = false;
 		
@@ -1275,11 +1272,11 @@ static int avl6211_set_voltage(struct dvb_frontend *fe,
 	if (!state->gpio_on) {	
 		state->gpio_on = true;		
 		if (state->config->set_external_vol_gpio) 
-			state->config->set_external_vol_gpio(&state->demod_id, 1);
+			state->config->set_external_vol_gpio(state->demod_id, 1);
 	}
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_read_ber(struct dvb_frontend* fe, u32* ber)
@@ -1301,7 +1298,7 @@ static int avl6211_read_ber(struct dvb_frontend* fe, u32* ber)
 	
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -1357,7 +1354,7 @@ static int avl6211_read_snr(struct dvb_frontend* fe, u16 *snr)
 	
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 struct Signal_Level
@@ -1418,7 +1415,7 @@ static int avl6211_read_signal_strength(struct dvb_frontend* fe, u16* signal_str
 	
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_read_status(struct dvb_frontend* fe, enum fe_status* status)
@@ -1437,7 +1434,7 @@ static int avl6211_read_status(struct dvb_frontend* fe, enum fe_status* status)
 		
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_read_ucblocks(struct dvb_frontend* fe, u32* ucblocks)
@@ -1500,7 +1497,7 @@ static int avl6211_get_frontend(struct dvb_frontend* fe, struct dtv_frontend_pro
 	}
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_channel_lock(struct dvb_frontend* fe)
@@ -1563,7 +1560,7 @@ static int avl6211_channel_lock(struct dvb_frontend* fe)
 		
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_set_frontend(struct dvb_frontend* fe)
@@ -1654,7 +1651,7 @@ static int avl6211_set_frontend(struct dvb_frontend* fe)
 	
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 	
 }
@@ -1680,7 +1677,7 @@ static int avl6211_get_demod_status(struct dvb_frontend* fe)
 	
 	return 0;
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -1723,7 +1720,7 @@ static int avl6211_setup_pll(struct avl6211_state* state, const struct avl6211_p
 	return 0;
 	
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static int avl6211_load_firmware(struct dvb_frontend* fe)
@@ -1739,10 +1736,10 @@ static int avl6211_load_firmware(struct dvb_frontend* fe)
 	if (ret)
 		goto err;
 
-	dev_dbg(&state->i2c->dev, "Uploading demod firmware (%s)...\n", AVL6211_DEMOD_FW);
+	dev_info(&state->i2c->dev, "Uploading demod firmware (%s)...\n", AVL6211_DEMOD_FW);
 	ret = request_firmware(&fw, AVL6211_DEMOD_FW, &state->i2c->dev);
 	if (ret) {
-		dev_dbg(&state->i2c->dev, "Firmware upload failed. Timeout or file not found\n");
+		dev_err(&state->i2c->dev, "Firmware upload failed. Timeout or file not found\n");
 		goto err;
 	}    
 
@@ -1750,7 +1747,7 @@ static int avl6211_load_firmware(struct dvb_frontend* fe)
 	if (!buffer) {
 		release_firmware(fw);
 		fw = NULL;
-		dev_dbg(&state->i2c->dev, "Failed to allocate tmp memory for firmware\n");
+		dev_err(&state->i2c->dev, "Failed to allocate tmp memory for firmware\n");
 		return -ENOMEM;
 	}
 	memcpy(buffer, fw->data, fw->size);
@@ -1791,7 +1788,7 @@ static int avl6211_load_firmware(struct dvb_frontend* fe)
 	
 err:
 	kfree(buffer);
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -1876,6 +1873,7 @@ static int avl6211_init(struct dvb_frontend* fe)
 	ret = av2011_tuner_init(fe);
 	if (ret)
 		goto err;
+
 	ret = avl6211_diseqc_init(fe);
 	if (ret)
 		goto err;
@@ -1890,12 +1888,12 @@ static int avl6211_init(struct dvb_frontend* fe)
 	
 	state->boot = true;
 	
-	dev_dbg(&state->i2c->dev, "AVL6211+AV2011 init OK\n");
+	dev_info(&state->i2c->dev, "AVL6211+AV2011 init OK\n");
 	
 	return 0;
 
 err:
-	dev_dbg(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
+	dev_err(&state->i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return ret;
 }
 static void avl6211_release(struct dvb_frontend* fe)
@@ -1912,7 +1910,7 @@ static struct dvb_frontend_ops avl6211_ops = {
 		.frequency_max_hz = 2150 * MHz,
 		.frequency_stepsize_hz = 0,		
 		.frequency_tolerance_hz = 0,
-		.symbol_rate_min = 800000,		/* Min = 800K */
+		.symbol_rate_min = 800000,	/* Min = 800K */
 		.symbol_rate_max = 50000000,	/* Max = 50M */
 		.caps = FE_CAN_INVERSION_AUTO |
 			FE_CAN_FEC_1_2 | FE_CAN_FEC_2_3 | FE_CAN_FEC_3_4 |
@@ -1920,7 +1918,13 @@ static struct dvb_frontend_ops avl6211_ops = {
 			FE_CAN_FEC_7_8 | FE_CAN_FEC_8_9 | FE_CAN_FEC_AUTO |
 			FE_CAN_QPSK    | FE_CAN_RECOVER | FE_CAN_2G_MODULATION			
 	},
-
+	.tuner_ops = {
+		.info = {
+			.name              = "Airoha Technology AV2011",
+			.frequency_min_hz  = 950 * MHz,
+			.frequency_max_hz  = 2150 * MHz
+		},
+	},
 	.init = avl6211_init,
 	.release = avl6211_release,
 	.read_status = avl6211_read_status,
@@ -1937,9 +1941,8 @@ static struct dvb_frontend_ops avl6211_ops = {
 };
 
 struct dvb_frontend* avl6211_attach(struct i2c_adapter* i2c,
-									struct avl6211_config* config,
-									int id)
-									
+					struct avl6211_config* config,
+					int id)
 {
 	struct avl6211_state* state = NULL;
 	int ret;
@@ -1967,10 +1970,10 @@ struct dvb_frontend* avl6211_attach(struct i2c_adapter* i2c,
 
 	return &state->frontend;
 	
-err2:	
+err2:
 	kfree(state);
-err1:	
-	dev_dbg(&i2c->dev, "%s: failed=%d\n", __func__, ret);	
+err1:
+	dev_err(&i2c->dev, "%s: failed=%d\n", __func__, ret);
 	return NULL;
 }
 
