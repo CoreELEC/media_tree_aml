@@ -285,6 +285,7 @@ static int m88rs6060_set_voltage(struct dvb_frontend *fe, enum fe_sec_voltage vo
 static int read_status(struct dvb_frontend *fe, enum fe_status* status)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
+	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	int lock = 0;
 
 	*status = 0;
@@ -310,7 +311,325 @@ static int read_status(struct dvb_frontend *fe, enum fe_status* status)
 	default:
 		break;
 	}
-	msleep(50);
+	state->fe_status = *status;
+
+	/* STRENGTH */
+	if (*status & FE_HAS_SIGNAL) {
+		u32 PGA2_cri_GS = 46, PGA2_crf_GS = 290, TIA_GS = 290;
+		u32 RF_GC = 1200, IF_GC = 1100, BB_GC = 300, PGA2_GC = 300, TIA_GC = 300;
+		u32 PGA2_cri = 0, PGA2_crf = 0;
+		u32 RFG = 0, IFG = 0, BBG = 0, PGA2G = 0, TIAG = 0;
+		u32 RFGS[13] = { 0, 245, 266, 268, 270, 285, 298, 295, 283, 285, 285, 300, 300 };
+		u32 IFGS[12] = { 0, 300, 230, 270, 270, 285, 295, 285, 290, 295, 295, 310 };
+		u32 BBGS[14] = { 0, 286, 275, 290, 294, 300, 290, 290, 285, 283, 260, 295, 290, 260 };
+		u32 i = 0;
+		int val;
+
+		val = m88rs6060_tuner_readreg(state, 0x5a);
+		RF_GC = val & 0x0f;
+		if (RF_GC >= ARRAY_SIZE(RFGS)) {
+			printk(KERN_ERR "%s: Invalid, RFGC = %d\n", __func__, RF_GC);
+			mutex_unlock(&state->status_lock);
+			return -EINVAL;
+		}
+
+		val = m88rs6060_tuner_readreg(state, 0x5f);
+			IF_GC = val & 0x0f;
+		if (IF_GC >= ARRAY_SIZE(IFGS)) {
+			printk(KERN_ERR "%s: Invalid, IFGC = %d\n", __func__, IF_GC);
+			mutex_unlock(&state->status_lock);
+			return -EINVAL;
+		}
+
+		val = m88rs6060_tuner_readreg(state, 0x3f);
+		TIA_GC = (val >> 4) & 0x07;
+
+		val = m88rs6060_tuner_readreg(state, 0x77);
+		BB_GC = (val >> 4) & 0x0f;
+		if (BB_GC >= ARRAY_SIZE(BBGS)) {
+			printk(KERN_ERR "%s: Invalid, BBGC = %d\n", __func__, BB_GC);
+			mutex_unlock(&state->status_lock);
+			return -EINVAL;
+		}
+
+		val = m88rs6060_tuner_readreg(state, 0x76);
+		PGA2_GC = val & 0x3f;
+		PGA2_cri = PGA2_GC >> 2;
+		PGA2_crf = PGA2_GC & 0x03;
+
+		for (i = 0; i <= RF_GC; i++) {
+			RFG += RFGS[i];
+		}
+
+		if(RF_GC == 0)	RFG += 400;
+		if(RF_GC == 1)	RFG += 300;
+		if(RF_GC == 2)	RFG += 200;
+		if(RF_GC == 3)	RFG += 100;
+
+		for (i = 0; i <= IF_GC; i++) {
+			IFG += IFGS[i];
+		}
+
+		TIAG = TIA_GC * TIA_GS;
+
+		for (i = 0; i <= BB_GC; i++) {
+			BBG += BBGS[i];
+		}
+
+		PGA2G = PGA2_cri * PGA2_cri_GS + PGA2_crf * PGA2_crf_GS;
+
+		val = m88rs6060_tuner_readreg(state, 0x96);
+
+		val += RFG + IFG - TIAG + BBG + PGA2G;
+
+		c->strength.stat[0].scale = FE_SCALE_RELATIVE;
+		c->strength.stat[0].uvalue = (15000 - clamp_val(val, 1000, 15000)) * 0xffff / (15000 - 1000);
+	} else {
+		c->strength.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+	}
+
+	/* CNR */
+	if (*status & FE_HAS_VITERBI) {
+		u8 val, npow1, npow2, spow1, cnt;
+		u32 npow, spow, snr_total;
+		u16 snr = 0;
+
+
+		switch (c->delivery_system) {
+		case SYS_DVBS:
+			cnt = M88RS6060_SNR_ITERATIONS; snr_total = 0;
+			while (cnt > 0) {
+				val = m88rs6060_readreg(state, 0xff);
+				msleep(1);
+				snr_total += val;
+				cnt--;
+			}
+			snr_total = DIV_ROUND_CLOSEST(snr_total, 8 * M88RS6060_SNR_ITERATIONS);
+			if (snr_total) {
+				/* SNR <= 65535 */
+				snr = (u16)(div_u64((u64) 10000 * intlog2(snr_total), intlog2(10))) ;
+			}
+			break;
+		case SYS_DVBS2:
+			cnt  = M88RS6060_SNR_ITERATIONS; npow = 0; spow = 0;
+			while (cnt > 0) {
+				npow1 = m88rs6060_readreg(state, 0x8c) & 0xff;
+				msleep(2);
+				npow2 = m88rs6060_readreg(state, 0x8d) & 0xff;
+				msleep(2);
+				npow += (((npow1 & 0x3f) + (u16)(npow2 << 6)) >> 2);
+
+				spow1 = m88rs6060_readreg(state, 0x8e) & 0xff;
+				msleep(2);
+				spow += ((spow1 * spow1) >> 1);
+				cnt--;
+			}
+			npow /= M88RS6060_SNR_ITERATIONS; spow /= M88RS6060_SNR_ITERATIONS;
+			if (spow > npow) {
+				snr_total = spow / npow;
+				/* SNR <= 65535 */
+				snr = (u16)(div_u64((u64) 10000 * intlog10(snr_total), (1 << 24))) ;
+			}
+			break;
+		default:
+			break;
+		}
+
+		if (snr) {
+			c->cnr.stat[0].scale = FE_SCALE_DECIBEL;
+			c->cnr.stat[0].svalue = snr;
+		} else {
+			c->cnr.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+		}
+	} else {
+		c->cnr.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+	}
+
+	/* BER */
+	if (*status & FE_HAS_LOCK) {
+		u8 tmp1, tmp2, tmp3;
+		u32 ldpc_frame_cnt, pre_err_packags;
+
+		switch (state->delivery_system) {
+		case SYS_DVBS:
+			m88rs6060_writereg(state, 0xf9, 0x04);
+			tmp3 = m88rs6060_readreg(state, 0xf8);
+			if ((tmp3 & 0x10) == 0){
+				tmp1 = m88rs6060_readreg(state, 0xf7);
+				tmp2 = m88rs6060_readreg(state, 0xf6);
+				tmp3 |= 0x10;
+				m88rs6060_writereg(state, 0xf8, tmp3);
+				state->preBer = (tmp1 << 8) | tmp2;
+				state->post_bit_error += state->preBer;
+				state->post_bit_count += 0x800000;
+			}
+			break;
+		case SYS_DVBS2:
+			tmp1 = m88rs6060_readreg(state, 0xd7) & 0xff;
+			tmp2 = m88rs6060_readreg(state, 0xd6) & 0xff;
+			tmp3 = m88rs6060_readreg(state, 0xd5) & 0xff;
+			ldpc_frame_cnt = (tmp1 << 16) | (tmp2 << 8) | tmp3;
+
+			tmp1 = m88rs6060_readreg(state, 0xf8) & 0xff;
+				tmp2 = m88rs6060_readreg(state, 0xf7) & 0xff;
+			pre_err_packags = (tmp1 << 8) | tmp2;
+
+			if (ldpc_frame_cnt > 1000){
+				m88rs6060_writereg(state, 0xd1, 0x01);
+				m88rs6060_writereg(state, 0xf9, 0x01);
+				m88rs6060_writereg(state, 0xf9, 0x00);
+				m88rs6060_writereg(state, 0xd1, 0x00);
+				state->preBer = pre_err_packags;
+				state->post_bit_error += state->preBer;
+				state->post_bit_count += 32 * ldpc_frame_cnt;
+			}
+			break;
+		default:
+			break;
+		}
+
+		c->post_bit_error.stat[0].scale = FE_SCALE_COUNTER;
+		c->post_bit_error.stat[0].uvalue = state->post_bit_error;
+		c->post_bit_count.stat[0].scale = FE_SCALE_COUNTER;
+		c->post_bit_count.stat[0].uvalue = state->post_bit_count;
+	} else {
+		c->post_bit_error.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+		c->post_bit_count.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+	}
+	if (*status & FE_HAS_LOCK) {
+		u8 buf[3];
+
+		switch (c->delivery_system) {
+		case SYS_DVBS:
+			buf[0] = m88rs6060_readreg(state, 0xe0);
+			buf[1] = m88rs6060_readreg(state, 0xe6);
+
+			switch ((buf[0] >> 2) & 0x01) {
+			case 0:
+				c->inversion = INVERSION_OFF;
+				break;
+			case 1:
+				c->inversion = INVERSION_ON;
+				break;
+			}
+
+			switch ((buf[1] >> 5) & 0x07) {
+			case 0:
+				c->fec_inner = FEC_7_8;
+				break;
+			case 1:
+				c->fec_inner = FEC_5_6;
+				break;
+			case 2:
+				c->fec_inner = FEC_3_4;
+				break;
+			case 3:
+				c->fec_inner = FEC_2_3;
+				break;
+			case 4:
+				c->fec_inner = FEC_1_2;
+				break;
+			default:
+				dprintk("invalid fec_inner\n");
+			}
+
+			c->modulation = QPSK;
+
+			break;
+		case SYS_DVBS2:
+			buf[0] = m88rs6060_readreg(state, 0x7e);
+			buf[1] = m88rs6060_readreg(state, 0x89);
+			buf[2] = m88rs6060_readreg(state, 0xf2);
+
+			switch ((buf[0] >> 0) & 0x0f) {
+			case 2:
+				c->fec_inner = FEC_2_5;
+				break;
+			case 3:
+				c->fec_inner = FEC_1_2;
+				break;
+			case 4:
+				c->fec_inner = FEC_3_5;
+				break;
+			case 5:
+				c->fec_inner = FEC_2_3;
+				break;
+			case 6:
+				c->fec_inner = FEC_3_4;
+				break;
+			case 7:
+				c->fec_inner = FEC_4_5;
+				break;
+			case 8:
+				c->fec_inner = FEC_5_6;
+				break;
+			case 9:
+				c->fec_inner = FEC_8_9;
+				break;
+			case 10:
+				c->fec_inner = FEC_9_10;
+				break;
+			default:
+				dprintk( "invalid fec_inner\n");
+			}
+
+			switch ((buf[0] >> 5) & 0x01) {
+			case 0:
+				c->pilot = PILOT_OFF;
+				break;
+			case 1:
+				c->pilot = PILOT_ON;
+				break;
+			}
+
+			switch ((buf[0] >> 6) & 0x07) {
+			case 0:
+				c->modulation = QPSK;
+				break;
+			case 1:
+				c->modulation = PSK_8;
+				break;
+			case 2:
+				c->modulation = APSK_16;
+				break;
+			case 3:
+				c->modulation = APSK_32;
+				break;
+			default:
+				dprintk( "invalid modulation\n");
+			}
+
+			switch ((buf[1] >> 7) & 0x01) {
+			case 0:
+				c->inversion = INVERSION_OFF;
+				break;
+			case 1:
+				c->inversion = INVERSION_ON;
+				break;
+			}
+
+			switch ((buf[2] >> 0) & 0x03) {
+			case 0:
+				c->rolloff = ROLLOFF_35;
+				break;
+			case 1:
+				c->rolloff = ROLLOFF_25;
+				break;
+			case 2:
+				c->rolloff = ROLLOFF_20;
+				break;
+			default:
+				dprintk("invalid rolloff\n");
+			}
+			break;
+		default:
+			dprintk("invalid delivery_system\n");
+		}
+		dprintk("%s(): fec_inner:%d pilot:%d modulation:%d inversion:%d rolloff:%d\n",
+			__func__, c->fec_inner, c->pilot, c->modulation, c->inversion, c->rolloff);
+	}
+
+	msleep(100);
 
 	return 0;
 }
@@ -318,11 +637,10 @@ static int read_status(struct dvb_frontend *fe, enum fe_status* status)
 static int m88rs6060_read_status(struct dvb_frontend *fe, enum fe_status* status)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
-	int lock = 0;
 
 	mutex_lock(&state->status_lock);
-	read_status(fe, &state->status);
-	*status = state->status;
+	read_status(fe, &state->fe_status);
+	*status = state->fe_status;
 	mutex_unlock(&state->status_lock);
 
 	return 0;
@@ -331,48 +649,10 @@ static int m88rs6060_read_status(struct dvb_frontend *fe, enum fe_status* status
 static int m88rs6060_read_ber(struct dvb_frontend *fe, u32* ber)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
-	u8 tmp1, tmp2, tmp3;
-	u32 ldpc_frame_cnt, pre_err_packags;
 
 	dprintk("%s()\n", __func__);
-	mutex_lock(&state->status_lock);
 
-	switch (state->delivery_system) {
-	case SYS_DVBS:
-		m88rs6060_writereg(state, 0xf9, 0x04);
-		tmp3 = m88rs6060_readreg(state, 0xf8);
-		if ((tmp3 & 0x10) == 0){
-			tmp1 = m88rs6060_readreg(state, 0xf7);
-			tmp2 = m88rs6060_readreg(state, 0xf6);
-			tmp3 |= 0x10;
-			m88rs6060_writereg(state, 0xf8, tmp3);
-			state->preBer = (tmp1 << 8) | tmp2;
-		}
-		break;
-	case SYS_DVBS2:
-		tmp1 = m88rs6060_readreg(state, 0xd7) & 0xff;
-		tmp2 = m88rs6060_readreg(state, 0xd6) & 0xff;
-		tmp3 = m88rs6060_readreg(state, 0xd5) & 0xff;
-		ldpc_frame_cnt = (tmp1 << 16) | (tmp2 << 8) | tmp3;
-
-		tmp1 = m88rs6060_readreg(state, 0xf8) & 0xff;
-		tmp2 = m88rs6060_readreg(state, 0xf7) & 0xff;
-		pre_err_packags = (tmp1 << 8) | tmp2;
-
-		if (ldpc_frame_cnt > 1000){
-			m88rs6060_writereg(state, 0xd1, 0x01);
-			m88rs6060_writereg(state, 0xf9, 0x01);
-			m88rs6060_writereg(state, 0xf9, 0x00);
-			m88rs6060_writereg(state, 0xd1, 0x00);
-			state->preBer = pre_err_packags;
-		}
-		break;
-	default:
-		break;
-	}
 	*ber = state->preBer;
-	mutex_unlock(&state->status_lock);
-//	msleep(20);
 
 	return 0;
 }
@@ -380,140 +660,33 @@ static int m88rs6060_read_ber(struct dvb_frontend *fe, u32* ber)
 static int m88rs6060_read_signal_strength(struct dvb_frontend *fe,
 						u16 *signal_strength)
 {
-	struct m88rs6060_state *state = fe->demodulator_priv;
-	u32 PGA2_cri_GS = 46, PGA2_crf_GS = 290, TIA_GS = 290;
-	u32 RF_GC = 1200, IF_GC = 1100, BB_GC = 300, PGA2_GC = 300, TIA_GC = 300;
-	u32 PGA2_cri = 0, PGA2_crf = 0;
-	u32 RFG = 0, IFG = 0, BBG = 0, PGA2G = 0, TIAG = 0;
-	u32 RFGS[13] = { 0, 245, 266, 268, 270, 285, 298, 295, 283, 285, 285, 300, 300 };
-	u32 IFGS[12] = { 0, 300, 230, 270, 270, 285, 295, 285, 290, 295, 295, 310 };
-	u32 BBGS[14] = { 0, 286, 275, 290, 294, 300, 290, 290, 285, 283, 260, 295, 290, 260 };
-	u32 i = 0;
-	int val;
+	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 
 	dprintk("%s()\n", __func__);
-	mutex_lock(&state->status_lock);
 
-	val = m88rs6060_tuner_readreg(state, 0x5a);
-	RF_GC = val & 0x0f;
-	if (RF_GC >= ARRAY_SIZE(RFGS)) {
-		printk(KERN_ERR "%s: Invalid, RFGC = %d\n", __func__, RF_GC);
-		mutex_unlock(&state->status_lock);
-		return -EINVAL;
-	}
-
-	val = m88rs6060_tuner_readreg(state, 0x5f);
-	IF_GC = val & 0x0f;
-	if (IF_GC >= ARRAY_SIZE(IFGS)) {
-		printk(KERN_ERR "%s: Invalid, IFGC = %d\n", __func__, IF_GC);
-		mutex_unlock(&state->status_lock);
-		return -EINVAL;
-	}
-
-	val = m88rs6060_tuner_readreg(state, 0x3f);
-	TIA_GC = (val >> 4) & 0x07;
-
-	val = m88rs6060_tuner_readreg(state, 0x77);
-	BB_GC = (val >> 4) & 0x0f;
-	if (BB_GC >= ARRAY_SIZE(BBGS)) {
-		printk(KERN_ERR "%s: Invalid, BBGC = %d\n", __func__, BB_GC);
-		mutex_unlock(&state->status_lock);
-		return -EINVAL;
-	}
-
-	val = m88rs6060_tuner_readreg(state, 0x76);
-	PGA2_GC = val & 0x3f;
-	PGA2_cri = PGA2_GC >> 2;
-	PGA2_crf = PGA2_GC & 0x03;
-
-	for (i = 0; i <= RF_GC; i++) {
-		RFG += RFGS[i];
-	}
-
-	if(RF_GC == 0)	RFG += 400;
-	if(RF_GC == 1)	RFG += 300;
-	if(RF_GC == 2)	RFG += 200;
-	if(RF_GC == 3)	RFG += 100;
-
-	for (i = 0; i <= IF_GC; i++) {
-		IFG += IFGS[i];
-	}
-
-	TIAG = TIA_GC * TIA_GS;
-
-	for (i = 0; i <= BB_GC; i++) {
-		BBG += BBGS[i];
-	}
-
-	PGA2G = PGA2_cri * PGA2_cri_GS + PGA2_crf * PGA2_crf_GS;
-
-	val = m88rs6060_tuner_readreg(state, 0x96);
-
-	val += RFG + IFG - TIAG + BBG + PGA2G;
-	
-	*signal_strength = (12000 - clamp_val(val, 1000, 12000)) * 0xffff / (12000 - 1000);
-	mutex_unlock(&state->status_lock);
-//	msleep(20);
+	if (c->strength.stat[0].scale == FE_SCALE_RELATIVE)
+		*signal_strength = c->strength.stat[0].uvalue;
+	else
+		*signal_strength = 0;
 
 	return 0;
 }
 
-static int m88rs6060_read_snr(struct dvb_frontend *fe, u16 *p_snr)
+static int m88rs6060_read_snr(struct dvb_frontend *fe, u16 *snr)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
-	u8 val, npow1, npow2, spow1, cnt;
-	u32 npow, spow, snr_total;
-	u16 snr = 0;
+	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 
 	dprintk("%s()\n", __func__);
-	mutex_lock(&state->status_lock);
 
-	switch (state->delivery_system) {
-	case SYS_DVBS:
-		cnt = M88RS6060_SNR_ITERATIONS; snr_total = 0;
-		while (cnt > 0) {
-			val = m88rs6060_readreg(state, 0xff);
-			msleep(10);
-			snr_total += val;
-			cnt--;
-		}
-		snr_total = DIV_ROUND_CLOSEST(snr_total, 8 * M88RS6060_SNR_ITERATIONS);
-		if (snr_total) {
-			/* SNR <= 65535 */
-			snr = (u16)(div_u64((u64) 10000 * intlog2(snr_total), intlog2(10))) * (4 + state->kratio);
-		}
-		break;
-	case SYS_DVBS2:
-		cnt  = M88RS6060_SNR_ITERATIONS; npow = 0; spow = 0;
-		while (cnt > 0) {
-			npow1 = m88rs6060_readreg(state, 0x8c) & 0xff;
-			msleep(2);
-			npow2 = m88rs6060_readreg(state, 0x8d) & 0xff;
-			msleep(2);
-			npow += (((npow1 & 0x3f) + (u16)(npow2 << 6)) >> 2);
-
-			spow1 = m88rs6060_readreg(state, 0x8e) & 0xff;
-			msleep(2);
-			spow += ((spow1 * spow1) >> 1);
-			cnt--;
-		}
-		npow /= M88RS6060_SNR_ITERATIONS; spow /= M88RS6060_SNR_ITERATIONS;
-		if (spow > npow) {
-			snr_total = spow / npow;
-			/* SNR <= 65535 */
-			snr = (u16)(div_u64((u64) 10000 * intlog10(snr_total), (1 << 24))) * (4 + state->kratio);
-		}
-		break;
-	default:
-		break;
-	}
-	*p_snr = snr;
-	mutex_unlock(&state->status_lock);
-//	msleep(20);
+	if (c->cnr.stat[0].scale == FE_SCALE_DECIBEL)
+		*snr = c->cnr.stat[0].svalue * (4 + state->kratio);
+	else
+		*snr = 0;
 
 	return 0;
 }
-
+#if 0
 static int m88rs6060_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
@@ -556,7 +729,7 @@ static int m88rs6060_read_ucblocks(struct dvb_frontend *fe, u32 *ucblocks)
 
 	return 0;
 }
-
+#endif
 static int m88rs6060_set_tone(struct dvb_frontend *fe, enum fe_sec_tone_mode tone)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
@@ -1351,8 +1524,6 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	m88rs6060_writereg(state, 0x06, 0xe0);
 	m88rs6060_select_mclk(state, realFreq / 1000, c->symbol_rate / 1000);
 	m88rs6060_set_ts_mclk(state, target_mclk, c->symbol_rate / 1000);
-	m88rs6060_writereg(state, 0x06, 0x00);
-	msleep(10);
 
 	/* set tuner pll */
 	freq_MHz = (realFreq + 500) / 1000;
@@ -1360,14 +1531,16 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	m88rs6060_tuner_set_bb(state, c->symbol_rate / 1000, lpf_offset_KHz);
 	m88rs6060_tuner_writereg(state, 0x00, 0x01);
 	m88rs6060_tuner_writereg(state, 0x00, 0x00);
+	m88rs6060_writereg(state, 0x06, 0x00);
+	msleep(20);
 
 	/* start demod to lock */
 	m88rs6060_demod_connect(fe, lpf_offset_KHz);
 
 	/* check lock status */
 	for (i = 0; i < 10 ; i++) {
-		read_status(fe, &state->status);
-		if (state->status & FE_HAS_LOCK)
+		read_status(fe, &state->fe_status);
+		if (state->fe_status & FE_HAS_LOCK)
 			break;
 //		msleep(10);
 	}
@@ -1409,7 +1582,7 @@ static int m88rs6060_tune(struct dvb_frontend *fe,
 	if (re_tune)
 		m88rs6060_set_frontend(fe);
 
-	*status = state->status;
+	*status = state->fe_status;
 	return 0;
 }
 
@@ -1424,6 +1597,7 @@ static enum dvbfe_algo m88rs6060_get_algo(struct dvb_frontend *fe)
 static int m88rs6060_initfe(struct dvb_frontend *fe)
 {
 	struct m88rs6060_state *state = fe->demodulator_priv;
+	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 
 	dprintk("%s()\n", __func__);
 
@@ -1440,6 +1614,14 @@ static int m88rs6060_initfe(struct dvb_frontend *fe)
 
 	m88rs6060_writereg(state, 0x08, 0x01 | m88rs6060_readreg(state, 0x08));
 	m88rs6060_writereg(state, 0x29, 0x01 | m88rs6060_readreg(state, 0x29));
+
+	/* init stats here in order signal app which stats are supported */
+	c->cnr.len = 1;
+	c->cnr.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+	c->post_bit_error.len = 1;
+	c->post_bit_error.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
+	c->post_bit_count.len = 1;
+	c->post_bit_count.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
 
 	return 0;
 }
@@ -1583,7 +1765,7 @@ static struct dvb_frontend_ops m88rs6060_ops = {
 	.read_ber		= m88rs6060_read_ber,
 	.read_signal_strength	= m88rs6060_read_signal_strength,
 	.read_snr		= m88rs6060_read_snr,
-	.read_ucblocks		= m88rs6060_read_ucblocks,
+//	.read_ucblocks		= m88rs6060_read_ucblocks,
 	.set_tone		= m88rs6060_set_tone,
 	.set_voltage		= m88rs6060_set_voltage,
 	.diseqc_send_master_cmd = m88rs6060_send_diseqc_msg,

@@ -46,7 +46,9 @@ struct m88rs6060_state {
 	u32 iMclkKHz;
 	int kratio;
 	struct mutex status_lock;
-	enum fe_status status;
+	enum fe_status fe_status;
+	u32 post_bit_error;
+	u32 post_bit_count;
 };
 
 static u8 rs6060_reg_tbl_def[] = {
