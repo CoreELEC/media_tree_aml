@@ -5572,7 +5572,7 @@ static const struct dvb_tuner_ops r912_tuner_ops = {
 	.info = {
 	.name           = "Rafael R912",
 
-		.frequency_min_hz  = 175 * MHz,
+		.frequency_min_hz  = 47 * MHz,
 		.frequency_max_hz  = 2150 * MHz,
 		.frequency_step_hz = 200 * kHz,
 	},

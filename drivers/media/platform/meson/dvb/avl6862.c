@@ -27,8 +27,8 @@
 #include <linux/string.h>
 #include <linux/bitrev.h>
 #include <linux/gpio.h>
+#include <media/dvb_frontend.h>
 
-#include "media/dvb_frontend.h"
 #include "avl6862.h"
 #include "avl6862_priv.h"
 
@@ -1632,44 +1632,7 @@ static int avl6862_tune(struct dvb_frontend *fe, bool re_tune,
 	}
 	return avl6862_read_status(fe, status);
 }
-#if 0
-static int avl6862_set_property(struct dvb_frontend *fe,
-		struct dtv_property *p)
-{
-	int ret = 0;
-	switch (p->cmd) {
-	case DTV_DELIVERY_SYSTEM:
-		ret = avl6862_set_dvbmode(fe, p->u.data);
-		switch (p->u.data) {
-		case SYS_DVBC_ANNEX_A:
-		case SYS_DVBC_ANNEX_B:
-			fe->ops.info.frequency_min = 47000000;
-			fe->ops.info.frequency_max = 862000000;
-			fe->ops.info.frequency_stepsize = 62500;
-			break;
-		case SYS_DVBS:
-		case SYS_DVBS2:
-			fe->ops.info.frequency_min = 950000;
-			fe->ops.info.frequency_max = 2150000;
-			fe->ops.info.frequency_stepsize = 0;
-			break;
-		case SYS_DVBT:
-		case SYS_DVBT2:
-		default:
-			fe->ops.info.frequency_min = 174000000;
-			fe->ops.info.frequency_max = 862000000;
-			fe->ops.info.frequency_stepsize = 250000;
-			break;
-		}
-
-		break;
-	default:
-		break;
-	}
-
-	return ret;
-}
-#endif
+ 
 static int avl6862_init(struct dvb_frontend *fe)
 {
 	return 0;
@@ -1691,7 +1654,7 @@ static struct dvb_frontend_ops avl6862_ops = {
 	.delsys = {SYS_DVBT, SYS_DVBT2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_B, SYS_DVBS, SYS_DVBS2},
 	.info = {
 		.name			= "Availink avl6862",
-		.frequency_min_hz	= 175 * MHz,
+		.frequency_min_hz	= 47 * MHz,
 		.frequency_max_hz	= 2150 * MHz,
 		.frequency_stepsize_hz	= 0,
 		.frequency_tolerance_hz	= 0,
@@ -1737,8 +1700,6 @@ static struct dvb_frontend_ops avl6862_ops = {
 	.diseqc_send_burst 		= avl6862_burst,
 	.get_frontend_algo		= avl6862fe_algo,
 	.tune				= avl6862_tune,
-
-// 	.set_property			= NULL, // avl6862_set_property,
 	.set_frontend			= avl6862_set_frontend,
 };
 
@@ -1746,7 +1707,7 @@ static struct dvb_frontend_ops avl6762_ops = {
 	.delsys = {SYS_DVBT, SYS_DVBT2, SYS_DVBC_ANNEX_A, SYS_DVBC_ANNEX_B},
 	.info = {
 		.name			= "Availink AVL6762",
-		.frequency_min_hz	= 175 * MHz,
+		.frequency_min_hz	= 47 * MHz,
 		.frequency_max_hz	= 858 * MHz,
 		.frequency_stepsize_hz	= 0,
 		.frequency_tolerance_hz	= 0,
@@ -1788,8 +1749,6 @@ static struct dvb_frontend_ops avl6762_ops = {
 	.read_ber			= avl6862_read_ber,
 	.get_frontend_algo		= avl6862fe_algo,
 	.tune				= avl6862_tune,
-
-// 	.set_property			= NULL, // avl6862_set_property,
 	.set_frontend			= avl6862_set_frontend,
 };
 
@@ -1867,5 +1826,3 @@ EXPORT_SYMBOL_GPL(avl6862_attach);
 MODULE_DESCRIPTION("Availink avl68xx DVB demodulator driver");
 MODULE_AUTHOR("Luis Alves (ljalvs@gmail.com)");
 MODULE_LICENSE("GPL");
-
-
