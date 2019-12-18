@@ -82,7 +82,7 @@ struct vivi_dev {
 	struct vframe_s *amlvideo_pool_ready[AMLVIDEO_POOL_SIZE + 1];
 	struct vframe_s *amlvideo_pool_omx[AMLVIDEO_POOL_SIZE + 1];
 	int index;
-	struct mutex vfpMutex;
+	struct mutex vf_mutex;
 	int amlvideo_v4l_num;
 	char vf_receiver_name[AMLVIDEO_VF_NAME_SIZE];
 	char vf_provider_name[AMLVIDEO_VF_NAME_SIZE];
@@ -91,6 +91,7 @@ struct vivi_dev {
 	struct vframe_receiver_s video_vf_recv;
 	u32 frame_num;
 	struct v4l2_amlogic_parm am_parm;
+	wait_queue_head_t wq;
 };
 
 struct vivi_fh {
@@ -105,6 +106,7 @@ struct vivi_fh {
 	enum v4l2_buf_type type;
 };
 
+extern bool video_inuse;
 extern bool omx_secret_mode;
 extern void get_ppmgr_buf_info(char **start, unsigned int *size);
 

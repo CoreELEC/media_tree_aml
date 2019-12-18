@@ -54,6 +54,8 @@
 #include "amlvideo.h"
 
 #define AVMLVIDEO_MODULE_NAME "amlvideo"
+#define KERNEL_ATRACE_TAG KERNEL_ATRACE_TAG_AMLVIDEO
+#include <trace/events/meson_atrace.h>
 
 #define AMLVIDEO_INFO(fmt, args...) pr_info("amlvid:info: "fmt"", ## args)
 #define AMLVIDEO_DBG(fmt, args...) pr_debug("amlvid:dbg: "fmt"", ## args)
@@ -70,6 +72,8 @@ AMLVIDEO_MINOR_VERSION, AMLVIDEO_RELEASE)
 
 #define RECEIVER_NAME "amlvideo"
 #define PROVIDER_NAME "amlvideo"
+#define RECEIVER_NAME_PIP "aml_video"
+#define PROVIDER_NAME_PIP "aml_video"
 
 #define AMLVIDEO_POOL_SIZE 16
 /*extern bool omx_secret_mode;*/
@@ -84,11 +88,12 @@ MODULE_AUTHOR("amlogic-sh");
 MODULE_LICENSE("GPL");
 /* static u32 vpts_remainder; */
 static unsigned int video_nr_base = 10;
+static unsigned int video_nr_base_second = 23;
 /* module_param(video_nr_base, uint, 0644); */
 /* MODULE_PARM_DESC(video_nr_base, "videoX start number, 10 is defaut"); */
 
 #ifdef CONFIG_AMLOGIC_MEDIA_MULTI_DEC
-static unsigned int n_devs = 1;
+static unsigned int n_devs = 2;
 #else
 static unsigned int n_devs = 1;
 #endif
@@ -153,9 +158,12 @@ static struct vframe_s *amlvideo_vf_peek(void *op_arg)
 
 static struct vframe_s *amlvideo_vf_get(void *op_arg)
 {
+	struct vframe_s *vf;
 	struct vivi_dev *dev = (struct vivi_dev *)op_arg;
 
-	return vfq_pop(&dev->q_ready);
+	vf = vfq_pop(&dev->q_ready);
+	ATRACE_COUNTER(dev->v4l2_dev.name, vfq_level(&dev->q_ready));
+	return vf;
 }
 
 static void amlvideo_vf_put(struct vframe_s *vf, void *op_arg)
@@ -229,27 +237,29 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 	struct vivi_dev *dev = (struct vivi_dev *)private_data;
 
 	if (type == VFRAME_EVENT_PROVIDER_UNREG) {
-		if (dev->index != 8)
-			mutex_lock(&dev->vfpMutex);
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_UNREG\n");
+		mutex_lock(&dev->vf_mutex);
 		if (vf_get_receiver(dev->vf_provider_name)) {
 			AMLVIDEO_DBG("unreg:amlvideo\n");
 			vf_unreg_provider(&dev->video_vf_prov);
-			omx_secret_mode = false;
+			if (dev->inst == 0)
+				omx_secret_mode = false;
 		}
 		dev->first_frame = 0;
 		vfq_init(&dev->q_ready, AMLVIDEO_POOL_SIZE + 1,
 			&dev->amlvideo_pool_ready[0]);
 		vfq_init(&dev->q_omx, AMLVIDEO_POOL_SIZE + 1,
-                                &dev->amlvideo_pool_omx[0]);
+			&dev->amlvideo_pool_omx[0]);
+		mutex_unlock(&dev->vf_mutex);
 	}
 	if (type == VFRAME_EVENT_PROVIDER_REG) {
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_REG\n");
+		mutex_lock(&dev->vf_mutex);
 
 		dev->vf = NULL;
 		dev->first_frame = 0;
 		dev->frame_num = 0;
-		mutex_unlock(&dev->vfpMutex);
+		mutex_unlock(&dev->vf_mutex);
 	} else if (type == VFRAME_EVENT_PROVIDER_QUREY_STATE) {
 		amlvideo_vf_states(&states, dev);
 		if (states.buf_avail_num > 0) {
@@ -266,11 +276,13 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 		/*break;*/
 	} else if (type == VFRAME_EVENT_PROVIDER_START) {
 		AMLVIDEO_DBG("AML:VFRAME_EVENT_PROVIDER_START\n");
+		mutex_lock(&dev->vf_mutex);
 		if (vf_get_receiver(dev->vf_provider_name)) {
 			struct vframe_receiver_s *aaa = vf_get_receiver(
 				dev->vf_provider_name);
 			AMLVIDEO_DBG("aaa->name=%s", aaa->name);
-			omx_secret_mode = true;
+			if (dev->inst == 0)
+				omx_secret_mode = true;
 			vfq_init(&dev->q_ready, AMLVIDEO_POOL_SIZE + 1,
 					&dev->amlvideo_pool_ready[0]);
 			vfq_init(&dev->q_omx, AMLVIDEO_POOL_SIZE + 1,
@@ -283,6 +295,7 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 						VFRAME_EVENT_PROVIDER_START,
 						NULL);
 		}
+		mutex_unlock(&dev->vf_mutex);
 	} else if (type == VFRAME_EVENT_PROVIDER_FR_HINT) {
 		vf_notify_receiver(dev->vf_provider_name,
 			VFRAME_EVENT_PROVIDER_FR_HINT, data);
@@ -298,6 +311,9 @@ static int video_receiver_event_fun(int type, void *data, void *private_data)
 
 		vf_notify_receiver(dev->vf_provider_name,
 			VFRAME_EVENT_PROVIDER_RESET, data);
+	} else if (type == VFRAME_EVENT_PROVIDER_VFRAME_READY) {
+		if (vf_peek(dev->vf_receiver_name) != NULL)
+			wake_up_interruptible(&dev->wq);
 	}
 	return 0;
 }
@@ -540,21 +556,16 @@ static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 	while ((vf = vfq_peek(&dev->q_omx)))
 	{
 		index = (u32)vf->pts_us64;
-		if (p->index > index)
-		{
-			vf_put(vfq_pop(&dev->q_omx), dev->vf_receiver_name);
-			printk("vidioc_qbuf skip: index:%u:%u\n", p->index, index);
-			continue;
-		}
-		else if (p->index == index)
-		{
-			vf = (vfq_pop(&dev->q_omx));
-			if (p->flags & V4L2_BUF_FLAG_DONE)
-				vf_put(vf, dev->vf_receiver_name);
-			else
-				vfq_push(&dev->q_ready, vf);
-		}
-		break;
+		vfq_push(&dev->q_ready, vfq_pop(&dev->q_omx));
+		ATRACE_COUNTER(dev->v4l2_dev.name, vfq_level(&dev->q_omx));
+		ATRACE_COUNTER(dev->v4l2_dev.name, vfq_level(&dev->q_ready));
+		vf_notify_receiver(
+				dev->vf_provider_name,
+				VFRAME_EVENT_PROVIDER_VFRAME_READY,
+				NULL);
+
+		if (p->index == index)
+			break;
 	}
 	return 0;
 }
@@ -565,6 +576,7 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 	int ret = 0;
 	u64 pts_us64 = 0;
 	u64 pts_tmp;
+	struct vframe_s *next_vf;
 
 	if (vfq_level(&dev->q_ready) > AMLVIDEO_POOL_SIZE - 1)
 		return -EAGAIN;
@@ -572,15 +584,18 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 	if (!vf_peek(dev->vf_receiver_name))
 		return -EAGAIN;
 
+	mutex_lock(&dev->vf_mutex);
+
 	dev->vf = vf_get(dev->vf_receiver_name);
 	if (!dev->vf) {
 		/* printk("%s, %s, %d\n", __FILE__, __FUNCTION__, __LINE__); */
-		mutex_unlock(&dev->vfpMutex);
+		mutex_unlock(&dev->vf_mutex);
 		return -EAGAIN;
 	}
 
 	if (dev->vf->index == 0xFFFFFFFF) {
 		pr_info("vidioc_dqbuf: Invalid vf\n");
+		mutex_unlock(&dev->vf_mutex);
 		return -EAGAIN;
 	}
 
@@ -609,6 +624,10 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 		/*AMLVIDEO_WARN("pts= %d, dev->vf->duration= %d\n",*/
 			/*dev->vf->pts, (DUR2PTS(dev->vf->duration)));*/
 	}
+	next_vf = vf_peek(dev->vf_receiver_name);
+	dev->vf->next_vf_pts_valid = next_vf != NULL;
+	if (dev->vf->next_vf_pts_valid)
+		dev->vf->next_vf_pts = next_vf->pts;
 
 	p->index = omx_freerun_index;
 
@@ -617,6 +636,7 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 	dev->last_pts_us64 = pts_us64;
 	dev->vf->pts_us64 = omx_freerun_index++;
 	vfq_push(&dev->q_omx, dev->vf);
+	ATRACE_COUNTER(dev->v4l2_dev.name, vfq_level(&dev->q_omx));
 
 	if ((dev->vf->type & VIDTYPE_COMPRESS) != 0) {
 		p->timecode.type = dev->vf->compWidth;
@@ -626,6 +646,7 @@ static int vidioc_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 		p->timecode.flags = dev->vf->height;
 	}
 	p->sequence = dev->frame_num++;
+	mutex_unlock(&dev->vf_mutex);
 
 	return ret;
 }
@@ -686,7 +707,6 @@ static int amlvideo_open(struct file *file)
 
 	dev->vf = NULL;
 	dev->index = 0;
-	mutex_unlock(&dev->vfpMutex);
 	mutex_lock(&dev->mutex);
 	dev->users++;
 	if (dev->users > 1) {
@@ -752,14 +772,21 @@ static unsigned int amlvideo_poll(struct file *file,
 {
 	struct vivi_fh *fh = file->private_data;
 	struct vivi_dev *dev = fh->dev;
-	struct videobuf_queue *q = &fh->vb_vidq;
 
 	dprintk(dev, 1, "%s\n", __func__);
 
 	if (fh->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		return POLLERR;
 
-	return videobuf_poll_stream(file, q, wait);
+	if (vf_peek(dev->vf_receiver_name))
+		return POLL_IN | POLLRDNORM;
+
+	poll_wait(file, &dev->wq, wait);
+
+	if (vf_peek(dev->vf_receiver_name))
+		return POLL_IN | POLLRDNORM;
+	else
+		return 0;
 }
 
 static int amlvideo_close(struct file *file)
@@ -771,7 +798,6 @@ static int amlvideo_close(struct file *file)
 	videobuf_mmap_free(&fh->vb_vidq);
 	kfree(fh);
 	dev->index = 8;
-	mutex_unlock(&dev->vfpMutex);
 /* if (dev->res) { */
 	kfree(dev->res);
 	dev->res = NULL;
@@ -779,6 +805,8 @@ static int amlvideo_close(struct file *file)
 	mutex_lock(&dev->mutex);
 	dev->users--;
 	mutex_unlock(&dev->mutex);
+	if (dev->inst == 0)
+		video_inuse = 0;
 	AMLVIDEO_DBG("amlvideo close");
 	return 0;
 }
@@ -892,14 +920,14 @@ static int __init amlvideo_create_instance(int inst)
 		goto free_dev;
 
 	/* init video dma queues */
-
+	init_waitqueue_head(&dev->wq);
 	INIT_LIST_HEAD(&dev->vidq.active);
 	init_waitqueue_head(&dev->vidq.wq);
 
 	/* initialize locks */
 	spin_lock_init(&dev->slock);
 	mutex_init(&dev->mutex);
-	mutex_init(&dev->vfpMutex);
+	mutex_init(&dev->vf_mutex);
 
 	ret = -ENOMEM;
 	vfd = video_device_alloc();
@@ -912,7 +940,10 @@ static int __init amlvideo_create_instance(int inst)
 	vfd->dev_debug = debug;
 	vfd->v4l2_dev = &dev->v4l2_dev;
 	dev->amlvideo_v4l_num = inst * 10 + video_nr_base;
-
+	if (inst == 0)
+		dev->amlvideo_v4l_num = video_nr_base;
+	else
+		dev->amlvideo_v4l_num = (inst - 1) + video_nr_base_second;
 	/* //////////////////////////////////////// */
 	/* vfd->v4l2_dev = &dev->v4l2_dev; */
 	/* //////////////////////////////////////// */
@@ -923,18 +954,19 @@ static int __init amlvideo_create_instance(int inst)
 		goto rel_vdev;
 
 	dev->inst = inst;
-#if 0
-	snprintf(dev->vf_receiver_name, AMLVIDEO_VF_NAME_SIZE,
-		(0) ? RECEIVER_NAME : RECEIVER_NAME ".%x",
-		inst & 0xff);
 
-	snprintf(dev->vf_provider_name, AMLVIDEO_VF_NAME_SIZE,
-		(0) ? PROVIDER_NAME : PROVIDER_NAME ".%x",
-		inst & 0xff);
-#else
-	memcpy(dev->vf_receiver_name, RECEIVER_NAME, sizeof(RECEIVER_NAME));
-	memcpy(dev->vf_provider_name, PROVIDER_NAME, sizeof(PROVIDER_NAME));
-#endif
+	if (inst != 0) {
+		snprintf(dev->vf_receiver_name, AMLVIDEO_VF_NAME_SIZE,
+			RECEIVER_NAME_PIP ".%x", inst & 0xff);
+
+		snprintf(dev->vf_provider_name, AMLVIDEO_VF_NAME_SIZE,
+			PROVIDER_NAME_PIP ".%x", inst & 0xff);
+	} else {
+		memcpy(dev->vf_receiver_name, RECEIVER_NAME,
+			sizeof(RECEIVER_NAME));
+		memcpy(dev->vf_provider_name, PROVIDER_NAME,
+			sizeof(PROVIDER_NAME));
+	}
 
 	vf_receiver_init(&dev->video_vf_recv,
 			dev->vf_receiver_name,
