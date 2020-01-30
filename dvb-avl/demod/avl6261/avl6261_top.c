@@ -346,55 +346,6 @@ static int avl6261_set_voltage(struct dvb_frontend *fe, enum fe_sec_voltage volt
   return ret;
 }
 
-#define Level_High_Stage 36
-#define Level_Low_Stage 76
-
-#define Percent_Space_High 10
-#define Percent_Space_Mid 30
-#define Percent_Space_Low 60
-
-#if 0
-static char * read_stdout(struct AVL62X1_Chip * pchip) {
-  static char buf[4096];
-  static char sbuf[1025];
-  static int initialized = 0;
-  AVL_ErrorCode r = AVL_EC_OK;
-  unsigned int n_chars = 0;
-  unsigned int i;
-
-  if(initialized == 0) {
-    // streamproc stdout
-    r |= II2C_Write32_AVL62X1(pchip->usI2CAddr, 0x0017b01c, 0x3 );
-    initialized = 1;
-  }
-  r |= II2C_Read32_AVL62X1(pchip->usI2CAddr, stream_proc__stdout_fifo_cdepth, &n_chars);
-  r |= II2C_Read_AVL62X1(pchip->usI2CAddr, stream_proc__stdout_fifo, buf, n_chars*4);
-  for(i=0; i < n_chars; i++) {
-    sbuf[i] = buf[i*4];
-  }
-  sbuf[n_chars] = '\0';
-  return sbuf;
-}
-#endif
-
-#if 0
-static char * read_stdout(struct AVL62X1_Chip * pchip) {
-  static char buf[4096];
-  static char sbuf[1025];
-  AVL_ErrorCode r = AVL_EC_OK;
-  unsigned int n_chars = 0;
-  unsigned int i;
-    
-  r |= II2C_Read32_AVL62X1(pchip->usI2CAddr, cpu_system__stdout_fifo_cdepth, &n_chars);
-  r |= II2C_Read_AVL62X1(pchip->usI2CAddr, cpu_system__stdout_fifo, buf, n_chars*4);
-  for(i=0; i < n_chars; i++) {
-    sbuf[i] = buf[i*4];
-  }
-  sbuf[n_chars] = '\0';
-  return sbuf;
-}
-#endif
-
 static int avl6261_read_status(struct dvb_frontend *fe, enum fe_status *status)
 {
   struct avl6261_priv *priv = fe->demodulator_priv;
