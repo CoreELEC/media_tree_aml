@@ -289,7 +289,7 @@ void __exit aml_dvb_exit(void)
 	}
 
 	/*switch_mod_gate_by_name("demux", 0); */
-	if (get_cpu_type() < MESON_CPU_MAJOR_ID_G12A)
+	if (get_cpu_type() < MESON_CPU_MAJOR_ID_GXL)
 	{
 		clk_disable_unprepare(dvb_uparsertop_clk_ctl);
 		clk_disable_unprepare(dvb_ahbarb0_clk_ctl);
