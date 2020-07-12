@@ -255,18 +255,28 @@ static int fe_dvb_probe(struct platform_device *pdev)
 				meson_dvb.xtal[i] = MXL603_XTAL_24MHz;
 				dev_info(&pdev->dev, "%s: %d MHz\n", buf, meson_dvb.xtal[i] == MXL603_XTAL_24MHz ? 24 : 16);
 		}
-
-		snprintf(buf, sizeof(buf), "demux%d", i);
-		meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, buf);
-		if (meson_dvb.demux_irq[i] < 0) {
-			dev_err(&pdev->dev, "can't find IRQ for demux%d\n", i);
-			return meson_dvb.demux_irq[i];
-		}
-		snprintf(buf, sizeof(buf), "asyncfifo%d", i);
-		meson_dvb.afifo_irq[i] = platform_get_irq_byname(pdev, buf);
-		if (meson_dvb.afifo_irq[i] < 0) {
-			dev_err(&pdev->dev, "can't find IRQ for asyncfifo%d\n", i);
-			return meson_dvb.afifo_irq[i];
+		if (i == 0) {
+			meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, "demux0");
+			if (meson_dvb.demux_irq[i] < 0) {
+				dev_err(&pdev->dev, "can't find IRQ for demux%d\n", i);
+				return meson_dvb.demux_irq[i];
+			}
+			meson_dvb.afifo_irq[i] = platform_get_irq_byname(pdev, "asyncfifo0");
+			if (meson_dvb.afifo_irq[i] < 0) {
+				dev_err(&pdev->dev, "can't find IRQ for asyncfifo%d\n", i);
+				return meson_dvb.afifo_irq[i];
+			}
+		} else {
+			meson_dvb.demux_irq[i] = platform_get_irq_byname(pdev, "demux1");
+			if (meson_dvb.demux_irq[i] < 0) {
+				dev_err(&pdev->dev, "can't find IRQ for demux%d\n", i);
+				return meson_dvb.demux_irq[i];
+			}
+			meson_dvb.afifo_irq[i] = platform_get_irq_byname(pdev, "asyncfifo1");
+			if (meson_dvb.afifo_irq[i] < 0) {
+				dev_err(&pdev->dev, "can't find IRQ for asyncfifo%d\n", i);
+				return meson_dvb.afifo_irq[i];
+			}
 		}
 		if (i == 0) {
 			meson_dvb.fec_reset[0] = of_get_named_gpio_flags(pdev->dev.of_node, "fec_reset_gpio-gpios", 0, NULL);
@@ -294,7 +304,7 @@ static int fe_dvb_probe(struct platform_device *pdev)
 		} else
 			meson_dvb.lock_led[i] = 0;
 	}
-	if (get_cpu_type() < MESON_CPU_MAJOR_ID_G12A)
+	if (get_cpu_type() < MESON_CPU_MAJOR_ID_GXL)
 	{
 		dvb_demux_clk_ctl = devm_clk_get(&pdev->dev, "demux");
 		dev_dbg(&pdev->dev, "dmx clk ctl = %p\n", dvb_demux_clk_ctl);
