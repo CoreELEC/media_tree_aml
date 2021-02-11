@@ -1824,9 +1824,9 @@ static int m88rs6060_probe(struct i2c_client *client,
 		goto err_regmap_0_regmap_exit;
 
 	dev->tuner_client =
-	    i2c_new_dummy(client->adapter, dev->config.tuner_adr);
-	if (!dev->tuner_client) {
-		ret = -ENODEV;
+	    i2c_new_dummy_device(client->adapter, dev->config.tuner_adr);
+	if (IS_ERR(dev->tuner_client)) {
+		ret = PTR_ERR(dev->tuner_client);
 		dev_err(&client->dev, "I2c register failed \n");
 		goto err_client_1_i2c_unregister_device;
 	}
