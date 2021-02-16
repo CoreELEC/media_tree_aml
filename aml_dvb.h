@@ -55,7 +55,7 @@
 #define SEC_BUF_GRP_COUNT 4
 #define SEC_BUF_BUSY_SIZE 4
 #define SEC_BUF_COUNT     (SEC_BUF_GRP_COUNT*8)
-#define ASYNCFIFO_COUNT   2
+#define ASYNCFIFO_COUNT   TS_IN_COUNT
 
 typedef enum dmx_source {
 	DMX_SOURCE_FRONT0 = 0,
