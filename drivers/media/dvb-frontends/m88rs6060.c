@@ -27,6 +27,274 @@ static u16 mes_loge[] = {
 	34340, 34657
 };
 
+static  struct MT_FE_PLS_INFO mPLSInfoTable[] = 
+ {
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0x00, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  TRUE, 		 0},
+	 {0x01, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   TRUE, 		 0},
+	 {0x02, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  TRUE, 		 1},
+	 {0x03, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   TRUE, 		 1},
+	 {0x04, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_4, 	  FALSE,  FALSE,		 0},
+	 {0x05, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_4, 	  TRUE,   FALSE,		 0},
+	 {0x06, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_4, 	  FALSE,  FALSE,		 1},
+	 {0x07, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_4, 	  TRUE,   FALSE,		 1},
+	 {0x08, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_3, 	  FALSE,  FALSE,		 0},
+	 {0x09, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_3, 	  TRUE,   FALSE,		 0},
+	 {0x0A, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_3, 	  FALSE,  FALSE,		 1},
+	 {0x0B, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_3, 	  TRUE,   FALSE,		 1},
+	 {0x0C, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_5, 	  FALSE,  FALSE,		 0},
+	 {0x0D, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_5, 	  TRUE,   FALSE,		 0},
+	 {0x0E, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_5, 	  FALSE,  FALSE,		 1},
+	 {0x0F, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_5, 	  TRUE,   FALSE,		 1},
+	 {0x10, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_2, 	  FALSE,  FALSE,		 0},
+	 {0x11, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_2, 	  TRUE,   FALSE,		 0},
+	 {0x12, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_2, 	  FALSE,  FALSE,		 1},
+	 {0x13, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_1_2, 	  TRUE,   FALSE,		 1},
+	 {0x14, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_5, 	  FALSE,  FALSE,		 0},
+	 {0x15, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_5, 	  TRUE,   FALSE,		 0},
+	 {0x16, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_5, 	  FALSE,  FALSE,		 1},
+	 {0x17, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_5, 	  TRUE,   FALSE,		 1},
+	 {0x18, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 0},
+	 {0x19, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 0},
+	 {0x1A, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 1},
+	 {0x1B, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 1},
+	 {0x1C, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 0},
+	 {0x1D, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 0},
+	 {0x1E, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 1},
+	 {0x1F, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 1},
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0x20, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_4_5, 	  FALSE,  FALSE,		 0},
+	 {0x21, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_4_5, 	  TRUE,   FALSE,		 0},
+	 {0x22, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_4_5, 	  FALSE,  FALSE,		 1},
+	 {0x23, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_4_5, 	  TRUE,   FALSE,		 1},
+	 {0x24, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 0},
+	 {0x25, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 0},
+	 {0x26, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 1},
+	 {0x27, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 1},
+	 {0x28, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 0},
+	 {0x29, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 0},
+	 {0x2A, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 1},
+	 {0x2B, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 1},
+	 {0x2C, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 0},
+	 {0x2D, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 0},
+	 {0x2E, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 1},
+	 {0x2F, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 1},
+	 {0x30, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_5, 	  FALSE,  FALSE,		 0},
+	 {0x31, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_5, 	  TRUE,   FALSE,		 0},
+	 {0x32, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_5, 	  FALSE,  FALSE,		 1},
+	 {0x33, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_5, 	  TRUE,   FALSE,		 1},
+	 {0x34, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 0},
+	 {0x35, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 0},
+	 {0x36, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 1},
+	 {0x37, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 1},
+	 {0x38, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 0},
+	 {0x39, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 0},
+	 {0x3A, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 1},
+	 {0x3B, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 1},
+	 {0x3C, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 0},
+	 {0x3D, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 0},
+	 {0x3E, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 1},
+	 {0x3F, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 1},
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0x40, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 0},
+	 {0x41, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 0},
+	 {0x42, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 1},
+	 {0x43, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 1},
+	 {0x44, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 0},
+	 {0x45, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 0},
+	 {0x46, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 1},
+	 {0x47, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_8psk, 	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 1},
+	 {0x48, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 0},
+	 {0x49, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 0},
+	 {0x4A, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 1},
+	 {0x4B, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 1},
+	 {0x4C, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 0},
+	 {0x4D, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 0},
+	 {0x4E, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 1},
+	 {0x4F, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 1},
+	 {0x50, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_4_5, 	  FALSE,  FALSE,		 0},
+	 {0x51, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_4_5, 	  TRUE,   FALSE,		 0},
+	 {0x52, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_4_5, 	  FALSE,  FALSE,		 1},
+	 {0x53, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_4_5, 	  TRUE,   FALSE,		 1},
+	 {0x54, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 0},
+	 {0x55, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 0},
+	 {0x56, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 1},
+	 {0x57, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 1},
+	 {0x58, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 0},
+	 {0x59, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 0},
+	 {0x5A, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 1},
+	 {0x5B, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 1},
+	 {0x5C, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 0},
+	 {0x5D, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 0},
+	 {0x5E, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 1},
+	 {0x5F, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_16Apsk,	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 1},
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0x60, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 0},
+	 {0x61, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 0},
+	 {0x62, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 1},
+	 {0x63, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 1},
+	 {0x64, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_4_5, 	  FALSE,  FALSE,		 0},
+	 {0x65, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_4_5, 	  TRUE,   FALSE,		 0},
+	 {0x66, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_4_5, 	  FALSE,  FALSE,		 1},
+	 {0x67, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_4_5, 	  TRUE,   FALSE,		 1},
+	 {0x68, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 0},
+	 {0x69, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 0},
+	 {0x6A, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 1},
+	 {0x6B, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 1},
+	 {0x6C, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 0},
+	 {0x6D, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 0},
+	 {0x6E, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_8_9, 	  FALSE,  FALSE,		 1},
+	 {0x6F, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_8_9, 	  TRUE,   FALSE,		 1},
+	 {0x70, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 0},
+	 {0x71, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 0},
+	 {0x72, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_9_10,	  FALSE,  FALSE,		 1},
+	 {0x73, 	  TRUE,   MtFeType_DvbS2,	  MtFeModMode_32Apsk,	  MtFeCodeRate_9_10,	  TRUE,   FALSE,		 1},
+	 {0x74, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0x75, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0x76, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 1},
+	 {0x77, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 1},
+	 {0x78, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0x79, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0x7A, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 1},
+	 {0x7B, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 1},
+	 {0x7C, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0x7D, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0x7E, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 1},
+	 {0x7F, 	  FALSE,  MtFeType_DvbS2,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 1},
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0x80, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0x81, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0x82, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0x83, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0x84, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_13_45,	  FALSE,  FALSE,		 0},
+	 {0x85, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_13_45,	  TRUE,   FALSE,		 0},
+	 {0x86, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_9_20,	  FALSE,  FALSE,		 0},
+	 {0x87, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_9_20,	  TRUE,   FALSE,		 0},
+	 {0x88, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_11_20,	  FALSE,  FALSE,		 0},
+	 {0x89, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_11_20,	  TRUE,   FALSE,		 0},
+	 {0x8A, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8Apsk_L,	  MtFeCodeRate_5_9, 	  FALSE,  FALSE,		 0},
+	 {0x8B, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8Apsk_L,	  MtFeCodeRate_5_9, 	  TRUE,   FALSE,		 0},
+	 {0x8C, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8Apsk_L,	  MtFeCodeRate_26_45,	  FALSE,  FALSE,		 0},
+	 {0x8D, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8Apsk_L,	  MtFeCodeRate_26_45,	  TRUE,   FALSE,		 0},
+	 {0x8E, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_23_36,	  FALSE,  FALSE,		 0},
+	 {0x8F, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_23_36,	  TRUE,   FALSE,		 0},
+	 {0x90, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_25_36,	  FALSE,  FALSE,		 0},
+	 {0x91, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_25_36,	  TRUE,   FALSE,		 0},
+	 {0x92, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_13_18,	  FALSE,  FALSE,		 0},
+	 {0x93, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_13_18,	  TRUE,   FALSE,		 0},
+	 {0x94, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_1_2, 	  FALSE,  FALSE,		 0},
+	 {0x95, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_1_2, 	  TRUE,   FALSE,		 0},
+	 {0x96, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_8_15,	  FALSE,  FALSE,		 0},
+	 {0x97, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_8_15,	  TRUE,   FALSE,		 0},
+	 {0x98, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_5_9, 	  FALSE,  FALSE,		 0},
+	 {0x99, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_5_9, 	  TRUE,   FALSE,		 0},
+	 {0x9A, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_26_45,	  FALSE,  FALSE,		 0},
+	 {0x9B, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_26_45,	  TRUE,   FALSE,		 0},
+	 {0x9C, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_5, 	  FALSE,  FALSE,		 0},
+	 {0x9D, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_5, 	  TRUE,   FALSE,		 0},
+	 {0x9E, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_3_5, 	  FALSE,  FALSE,		 0},
+	 {0x9F, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_3_5, 	  TRUE,   FALSE,		 0},
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0xA0, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_28_45,	  FALSE,  FALSE,		 0},
+	 {0xA1, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_28_45,	  TRUE,   FALSE,		 0},
+	 {0xA2, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_23_36,	  FALSE,  FALSE,		 0},
+	 {0xA3, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_23_36,	  TRUE,   FALSE,		 0},
+	 {0xA4, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 0},
+	 {0xA5, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk_L,   MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 0},
+	 {0xA6, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_15,	  FALSE,  FALSE,		 0},
+	 {0xA7, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_15,	  TRUE,   FALSE,		 0},
+	 {0xA8, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_13_18,	  FALSE,  FALSE,		 0},
+	 {0xA9, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_13_18,	  TRUE,   FALSE,		 0},
+	 {0xAA, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_7_9, 	  FALSE,  FALSE,		 0},
+	 {0xAB, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_7_9, 	  TRUE,   FALSE,		 0},
+	 {0xAC, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_77_90,	  FALSE,  FALSE,		 0},
+	 {0xAD, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_77_90,	  TRUE,   FALSE,		 0},
+	 {0xAE, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk_L,   MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 0},
+	 {0xAF, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk_L,   MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 0},
+	 {0xB0, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0xB1, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0xB2, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_32_45,	  FALSE,  FALSE,		 0},
+	 {0xB3, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_32_45,	  TRUE,   FALSE,		 0},
+	 {0xB4, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_11_15,	  FALSE,  FALSE,		 0},
+	 {0xB5, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_11_15,	  TRUE,   FALSE,		 0},
+	 {0xB6, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_7_9, 	  FALSE,  FALSE,		 0},
+	 {0xB7, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_7_9, 	  TRUE,   FALSE,		 0},
+	 {0xB8, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk_L,   MtFeCodeRate_32_45,	  FALSE,  FALSE,		 0},
+	 {0xB9, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk_L,   MtFeCodeRate_32_45,	  TRUE,   FALSE,		 0},
+	 {0xBA, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk,	  MtFeCodeRate_11_15,	  FALSE,  FALSE,		 0},
+	 {0xBB, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk,	  MtFeCodeRate_11_15,	  TRUE,   FALSE,		 0},
+	 {0xBC, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0xBD, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0xBE, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk,	  MtFeCodeRate_7_9, 	  FALSE,  FALSE,		 0},
+	 {0xBF, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0xC0, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0xC1, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0xC2, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk,	  MtFeCodeRate_4_5, 	  FALSE,  FALSE,		 0},
+	 {0xC3, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk,	  MtFeCodeRate_4_5, 	  TRUE,   FALSE,		 0},
+	 {0xC4, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0xC5, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0xC6, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk,	  MtFeCodeRate_5_6, 	  FALSE,  FALSE,		 0},
+	 {0xC7, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_64Apsk,	  MtFeCodeRate_5_6, 	  TRUE,   FALSE,		 0},
+	 {0xC8, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_128Apsk,	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 0},
+	 {0xC9, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_128Apsk,	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 0},
+	 {0xCA, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_128Apsk,	  MtFeCodeRate_7_9, 	  FALSE,  FALSE,		 0},
+	 {0xCB, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_128Apsk,	  MtFeCodeRate_7_9, 	  TRUE,   FALSE,		 0},
+	 {0xCC, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_29_45,	  FALSE,  FALSE,		 0},
+	 {0xCD, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_29_45,	  TRUE,   FALSE,		 0},
+	 {0xCE, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 0},
+	 {0xCF, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 0},
+	 {0xD0, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_31_45,	  FALSE,  FALSE,		 0},
+	 {0xD1, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_31_45,	  TRUE,   FALSE,		 0},
+	 {0xD2, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk,	  MtFeCodeRate_32_45,	  FALSE,  FALSE,		 0},
+	 {0xD3, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk,	  MtFeCodeRate_32_45,	  TRUE,   FALSE,		 0},
+	 {0xD4, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_11_15,	  FALSE,  FALSE,		 0},
+	 {0xD5, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk_L,  MtFeCodeRate_11_15,	  TRUE,   FALSE,		 0},
+	 {0xD6, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk,	  MtFeCodeRate_3_4, 	  FALSE,  FALSE,		 0},
+	 {0xD7, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_256Apsk,	  MtFeCodeRate_3_4, 	  TRUE,   FALSE,		 1},
+	 {0xD8, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_11_45,	  FALSE,  FALSE,		 1},
+	 {0xD9, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_11_45,	  TRUE,   FALSE,		 1},
+	 {0xDA, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_4_15,	  FALSE,  FALSE,		 1},
+	 {0xDB, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_4_15,	  TRUE,   FALSE,		 1},
+	 {0xDC, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_14_45,	  FALSE,  FALSE,		 1},
+	 {0xDD, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_14_45,	  TRUE,   FALSE,		 1},
+	 {0xDE, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_7_15,	  FALSE,  FALSE,		 1},
+	 {0xDF, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_7_15,	  TRUE,   FALSE,		 1},
+ //   PLS Code,   Valid,  DVB Type, 		  Mod Mode, 			  Code Rate,			  Pilot,  Dummy Frames,  Frame Length
+	 {0xE0, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_8_15,	  FALSE,  FALSE,		 1},
+	 {0xE1, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_8_15,	  TRUE,   FALSE,		 1},
+	 {0xE2, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_32_45,	  FALSE,  FALSE,		 1},
+	 {0xE3, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_Qpsk, 	  MtFeCodeRate_32_45,	  TRUE,   FALSE,		 1},
+	 {0xE4, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_7_15,	  FALSE,  FALSE,		 1},
+	 {0xE5, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_7_15,	  TRUE,   FALSE,		 1},
+	 {0xE6, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_8_15,	  FALSE,  FALSE,		 1},
+	 {0xE7, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_8_15,	  TRUE,   FALSE,		 1},
+	 {0xE8, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_26_45,	  FALSE,  FALSE,		 1},
+	 {0xE9, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_26_45,	  TRUE,   FALSE,		 1},
+	 {0xEA, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_32_45,	  FALSE,  FALSE,		 1},
+	 {0xEB, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_8psk, 	  MtFeCodeRate_32_45,	  TRUE,   FALSE,		 1},
+	 {0xEC, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_7_15,	  FALSE,  FALSE,		 1},
+	 {0xED, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_7_15,	  TRUE,   FALSE,		 1},
+	 {0xEE, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_15,	  FALSE,  FALSE,		 1},
+	 {0xEF, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_8_15,	  TRUE,   FALSE,		 1},
+	 {0xF0, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_26_45,	  FALSE,  FALSE,		 1},
+	 {0xF1, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_26_45,	  TRUE,   FALSE,		 1},
+	 {0xF2, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_5, 	  FALSE,  FALSE,		 1},
+	 {0xF3, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_3_5, 	  TRUE,   FALSE,		 1},
+	 {0xF4, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_32_45,	  FALSE,  FALSE,		 1},
+	 {0xF5, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_16Apsk,	  MtFeCodeRate_32_45,	  TRUE,   FALSE,		 1},
+	 {0xF6, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_2_3, 	  FALSE,  FALSE,		 1},
+	 {0xF7, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_2_3, 	  TRUE,   FALSE,		 1},
+	 {0xF8, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_32_45,	  FALSE,  FALSE,		 1},
+	 {0xF9, 	  TRUE,   MtFeType_DvbS2X,	  MtFeModMode_32Apsk,	  MtFeCodeRate_32_45,	  TRUE,   FALSE,		 1},
+	 {0xFA, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0xFB, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0xFC, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0xFD, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0},
+	 {0xFE, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
+	 {0xFF, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0}
+ };
+
 static int rs6060_set_reg(struct m88rs6060_dev *dev, u8 reg, u8 data)
 {
 	struct i2c_client *client = dev->demod_client;
@@ -77,7 +345,7 @@ static int rs6060_get_reg(struct m88rs6060_dev *dev, u8 reg)
 		 .len = 1}
 	};
 
-	val = 0x12;
+	val = dev->config.repeater_value;
 	ret = regmap_write(dev->regmap, 0x03, val);
 	if (ret)
 		dev_dbg(&client->dev, "fail=%d\n", ret);
@@ -424,11 +692,13 @@ static void rs6060_wakeup(struct m88rs6060_dev *dev)
 static void m88rs6060_hard_rest(struct m88rs6060_dev *dev)
 {
 	unsigned val;
-
+	
 	rs6060_set_reg(dev, 0x4, 0x1);
 	rs6060_set_reg(dev, 0x4, 0x0);
+
 	msleep(1);
 	rs6060_wakeup(dev);
+	
 
 	regmap_read(dev->regmap, 0x08, &val);
 	regmap_write(dev->regmap, 0x8, (val | 0x1));
@@ -447,7 +717,7 @@ static void m88rs6060_hard_rest(struct m88rs6060_dev *dev)
 	msleep(1);
 	regmap_read(dev->regmap, 0x08, &val);
 	regmap_write(dev->regmap, 0x8, (val | 0x1));
-
+	
 	return;
 }
 
@@ -637,7 +907,64 @@ static void rs6060_set_ts_mclk(struct m88rs6060_dev *dev, u32 mclk)
 	msleep(1);
 
 }
+static int rs6060_get_ts_mclk(struct m88rs6060_dev *dev,u32*mclk )
+{
+	u8 reg15, reg16, reg1D, reg1E, reg1F;
+	u8 sm, f0, f1, f2, f3;
+	u16 pll_div_fb, N;
+	u32 MCLK_KHz;
 
+
+	*mclk = MT_FE_MCLK_KHZ;
+
+	reg15 = rs6060_get_reg(dev, 0x15);
+	reg16 = rs6060_get_reg(dev, 0x16);
+	reg1D = rs6060_get_reg(dev, 0x1d);
+	reg1E = rs6060_get_reg(dev, 0x1e);
+	reg1F = rs6060_get_reg(dev, 0x1f);
+
+	MCLK_KHz = 9000;
+	pll_div_fb = reg15 & 0x01;
+	pll_div_fb <<= 8;
+	pll_div_fb += reg16;
+
+	MCLK_KHz *= (pll_div_fb + 32);
+
+	sm = reg1D & 0x03;
+
+	f3 = (reg1E >> 4) & 0x0F;
+	f2 = reg1E & 0x0F;
+	f1 = (reg1F >> 4) & 0x0F;
+	f0 = reg1F & 0x0F;
+
+	if(f3 == 0)		f3 = 16;
+	if(f2 == 0)		f2 = 16;
+	if(f1 == 0)		f1 = 16;
+	if(f0 == 0)		f0 = 16;
+	N = f2 + f1;
+
+	switch(sm){
+		case 3:
+			N = f3 + f2 + f1 + f0;
+			break;
+		case 2:
+			N = f2 + f1 + f0;
+			break;
+		case 1:
+		case 0:
+		default:
+			N = f2 + f1;
+			break;
+	}
+
+	MCLK_KHz *= 4;
+	MCLK_KHz /= N;
+
+	*mclk = MCLK_KHz;
+
+	return 0;
+
+}
 static int rs6060_set_pll_freq(struct m88rs6060_dev *dev, u32 tuner_freq_MHz)
 {
 	u32 fcry_KHz, ulNDiv1, ulNDiv2;
@@ -867,12 +1194,13 @@ static void m88res6060_set_ts_mode(struct m88rs6060_dev *dev)
 		tmp &= ~0x20;
 	}
 	tmp |= 0x1;
-
+	printk("tmp = 0x%x \n",tmp);
 	regmap_write(dev->regmap, 0x0b, tmp);
 	regmap_read(dev->regmap, 0x0c, &tmp);
+	regmap_write(dev->regmap, 0xf4, 0x01);
 	tmp &= ~0x80;
 	regmap_write(dev->regmap, 0x0c, tmp);
-	regmap_write(dev->regmap, 0xf4, 0x01);
+
 
 	return;
 
@@ -918,8 +1246,6 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	ret = regmap_multi_reg_write(dev->regmap, reset_buf, 2);
 	if (ret)
 		goto err;
-
-	//test_search(dev);
 
 	regmap_write(dev->regmap, 0x7, 0x80);
 	regmap_write(dev->regmap, 0x7, 0x00);
@@ -1035,8 +1361,8 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 		regmap_write(dev->regmap, 0xe0, 0xf8);
 	}
 
-	regmap_write(dev->regmap, 0x08, 3);
-	regmap_write(dev->regmap, 0xe0, 0xf8);
+//	regmap_write(dev->regmap, 0x08, 3);
+//	regmap_write(dev->regmap, 0xe0, 0xf8);
 
 	s32tmp = 0x10000 * lpf_offset_KHz;
 	s32tmp = (2 * s32tmp + dev->mclk) / (2 * dev->mclk);
@@ -1054,6 +1380,14 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	if (ret)
 		goto err;
 
+	
+//	ret = regmap_write(dev->regmap, 0xfe, 0xe1);
+//	if (ret)
+//		goto err;
+
+//	ret = regmap_write(dev->regmap, 0xea, 0x4);
+	//if (ret)
+//		goto err;
 	if (c->stream_id != NO_STREAM_ID_FILTER) {
 		isi = c->stream_id & 0xff;
 		pls_mode = (c->stream_id >> 26) & 3;
@@ -1129,6 +1463,8 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 			regmap_write(dev->regmap, 0xf5, tsid[0]);
 	}
 
+	dev->TsClockChecked = true;
+
 	return 0;
 
  err:
@@ -1186,8 +1522,7 @@ static int m88rs6060_init(struct dvb_frontend *fe)
 	for (rem = firmware->size; rem > 0; rem -= (dev->config.i2c_wr_max - 1)) {
 		len = min(dev->config.i2c_wr_max - 1, rem);
 		ret = m88rs6060_fireware_download(dev, 0xb0,
-						  &firmware->
-						  data[firmware->size - rem],
+						  &firmware->data[firmware->size - rem],
 						  len);
 		if (ret) {
 			dev_err(&client->dev,
@@ -1245,7 +1580,290 @@ static int m88rs6060_init(struct dvb_frontend *fe)
 	return ret;
 
 }
+static int m88rs6060_get_sym_rate(struct m88rs6060_dev *dev,
+						u32 *sym_rate_KSs)
+{
+	u16 tmp;
+	u32 sym_rate_tmp;
+	unsigned val_0x6d,val_0x6e;
 
+	regmap_read(dev->regmap,0x6d,&val_0x6d);
+	regmap_read(dev->regmap,0x6e,&val_0x6e);
+
+	tmp = (u16)((val_0x6e<<8)|val_0x6d);
+	sym_rate_tmp = tmp*dev->mclk;
+	sym_rate_tmp /= (1<<16);
+	*sym_rate_KSs = sym_rate_tmp;
+
+	return 0;
+}
+static int m88rs6060_get_channel_info(struct m88rs6060_dev *dev,
+						struct MT_FE_CHAN_INFO_DVBS2*p_info)
+{
+	unsigned tmp,val_0x17,val_0x18,ucPLSCode;
+	
+	regmap_read(dev->regmap,0x08,&tmp);
+	if((tmp&0x08)==0x08){    //dvbs2 signal
+
+		p_info->type = MtFeType_DvbS2;
+		
+		regmap_write(dev->regmap,0x8a,0x01);
+		regmap_read(dev->regmap,0x17,&val_0x17);
+		p_info->is_dummy_frame = (val_0x17&0x40)?true:false;
+
+		regmap_read(dev->regmap,0x18,&val_0x18);
+		tmp = (val_0x18>>5) & 0x07;
+		switch(tmp){
+		    case 1: p_info->mod_mode = MtFeModMode_8psk; break;
+			case 2: p_info->mod_mode = MtFeModMode_16Apsk; break;
+		    case 3: p_info->mod_mode = MtFeModMode_32Apsk; break;
+		    case 4: p_info->mod_mode = MtFeModMode_64Apsk; break;
+		    case 5: p_info->mod_mode = MtFeModMode_128Apsk; break;
+		    case 6: 
+		    case 7: p_info->mod_mode = MtFeModMode_256Apsk; break;
+		    case 0: 
+			default: p_info->mod_mode = MtFeModMode_Qpsk; break;
+		
+		}
+		p_info->iVcmCycle = val_0x18 &0x1F;
+		regmap_read(dev->regmap,0x19,&ucPLSCode);
+		p_info->iPlsCode = ucPLSCode;
+		p_info->type = mPLSInfoTable[ucPLSCode].mDvbType;
+
+		if(mPLSInfoTable[ucPLSCode].bValid){
+			p_info->mod_mode = mPLSInfoTable[ucPLSCode].mModMode;
+			p_info->code_rate = mPLSInfoTable[ucPLSCode].mCodeRate;
+			p_info->is_dummy_frame = mPLSInfoTable[ucPLSCode].bDummyFrame;
+			p_info->is_pilot_on = mPLSInfoTable[ucPLSCode].bPilotOn;
+			p_info->iFrameLength = mPLSInfoTable[ucPLSCode].iFrameLength;
+
+		}else{
+			//p_info->mod_mode = mPLSInfoTable[ucPLSCode].mModMode;
+			p_info->code_rate = mPLSInfoTable[ucPLSCode].mCodeRate;
+			//p_info->is_dummy_frame = mPLSInfoTable[ucPLSCode].bDummyFrame;
+			p_info->is_pilot_on = mPLSInfoTable[ucPLSCode].bPilotOn;
+			p_info->iFrameLength = mPLSInfoTable[ucPLSCode].iFrameLength;
+
+		}
+
+		regmap_read(dev->regmap,0x89,&tmp);
+		p_info->is_spectrum_inv = 
+			((tmp&0x80)!=0)? MtFeSpectrum_Inversion: MtFeSpectrum_Normal;
+
+		regmap_read(dev->regmap,0x76,&tmp);
+		tmp &=0x03;
+		if(p_info->type == MtFeType_DvbS2X){  //dvbs2x
+			switch(tmp){
+				case 0 : p_info->roll_off = MtFeRollOff_0p15;break;
+				case 1 : p_info->roll_off = MtFeRollOff_0p10;break;
+				case 2 : p_info->roll_off = MtFeRollOff_0p05;break;
+				default : p_info->roll_off = MtFeRollOff_Undef;break;
+				
+			}
+		}else{    //dvbs2
+				switch(tmp){
+				case 0 : p_info->roll_off = MtFeRollOff_0p35;break;
+				case 1 : p_info->roll_off = MtFeRollOff_0p25;break;
+				case 2 : p_info->roll_off = MtFeRollOff_0p20;break;
+				default : p_info->roll_off = MtFeRollOff_Undef;break;
+				
+			}
+			}
+	}
+	else{
+		p_info->type = MtFeType_DvbS;
+		p_info->mod_mode = MtFeModMode_Qpsk;
+
+		regmap_read(dev->regmap,0xe6,&tmp);
+		tmp= (u8)tmp>>5;
+		switch(tmp){
+			case 0 : p_info->code_rate = MtFeCodeRate_7_8;break;
+			case 1 : p_info->code_rate = MtFeCodeRate_5_6;break;
+			case 2 : p_info->code_rate = MtFeCodeRate_3_4;break;
+			case 3 : p_info->code_rate = MtFeCodeRate_2_3;break;
+			case 4 : p_info->code_rate = MtFeCodeRate_1_2;break;
+			default : p_info->code_rate = MtFeCodeRate_Undef;break;
+		}
+		p_info->is_pilot_on = false;
+		regmap_read(dev->regmap,0xe0,&tmp);
+		p_info->is_spectrum_inv = 
+			((tmp&0x40)!=0)? MtFeSpectrum_Inversion: MtFeSpectrum_Normal;
+		p_info->roll_off = MtFeRollOff_0p35;
+		p_info->is_dummy_frame = false;
+		p_info->iVcmCycle = -1;
+		p_info->iPlsCode = 0;
+		p_info->iFrameLength = 0;
+	}
+
+	return 0;
+}
+
+static int m88rs6060_set_clock_ratio(struct m88rs6060_dev*dev )
+{
+	unsigned mod_fac,tmp1,tmp2,val;
+	u32 input_datarate,locked_sym_rate_KSs;
+	u32 Mclk_KHz = 96000,iSerialMclkHz;
+	u16 divid_ratio = 0;
+	struct MT_FE_CHAN_INFO_DVBS2 p_info;
+	
+	m88rs6060_get_sym_rate(dev,&locked_sym_rate_KSs);
+
+	regmap_read(dev->regmap,0x9d,&val);
+	regmap_write(dev->regmap,0x9d,val|0x08);
+
+	m88rs6060_get_channel_info(dev,&p_info);
+
+	if(p_info.type==MtFeType_DvbS2){
+
+       switch(p_info.mod_mode)
+        {
+            case MtFeModMode_8psk:
+            case MtFeModMode_8Apsk_L:       mod_fac = 3; break;
+            case MtFeModMode_16Apsk:
+            case MtFeModMode_16Apsk_L:      mod_fac = 4; break;
+            case MtFeModMode_32Apsk:
+            case MtFeModMode_32Apsk_L:      mod_fac = 5; break;
+            case MtFeModMode_64Apsk:
+            case MtFeModMode_64Apsk_L:      mod_fac = 6; break;
+            case MtFeModMode_128Apsk:
+            case MtFeModMode_128Apsk_L:     mod_fac = 7; break;
+            case MtFeModMode_256Apsk:
+            case MtFeModMode_256Apsk_L:     mod_fac = 8; break;
+            case MtFeModMode_Qpsk:
+            default:                        mod_fac = 2; break;
+        }
+		switch(p_info.code_rate)
+		{
+			case MtFeCodeRate_1_4:		input_datarate = locked_sym_rate_KSs*mod_fac/8/4;		break;
+			case MtFeCodeRate_1_3:		input_datarate = locked_sym_rate_KSs*mod_fac/8/3;		break;
+			case MtFeCodeRate_2_5:		input_datarate = locked_sym_rate_KSs*mod_fac*2/8/5;		break;
+			case MtFeCodeRate_1_2:		input_datarate = locked_sym_rate_KSs*mod_fac/8/2;		break;
+			case MtFeCodeRate_3_5:		input_datarate = locked_sym_rate_KSs*mod_fac*3/8/5;		break;
+			case MtFeCodeRate_2_3:		input_datarate = locked_sym_rate_KSs*mod_fac*2/8/3;		break;
+			case MtFeCodeRate_3_4:		input_datarate = locked_sym_rate_KSs*mod_fac*3/8/4;		break;
+			case MtFeCodeRate_4_5:		input_datarate = locked_sym_rate_KSs*mod_fac*4/8/5;		break;
+			case MtFeCodeRate_5_6:		input_datarate = locked_sym_rate_KSs*mod_fac*5/8/6;		break;
+			case MtFeCodeRate_8_9:		input_datarate = locked_sym_rate_KSs*mod_fac*8/8/9;		break;
+			case MtFeCodeRate_9_10:		input_datarate = locked_sym_rate_KSs*mod_fac*9/8/10;	break;
+			case MtFeCodeRate_5_9:		input_datarate = locked_sym_rate_KSs*mod_fac*5/8/9;		break;
+			case MtFeCodeRate_7_9:		input_datarate = locked_sym_rate_KSs*mod_fac*7/8/9;		break;
+			case MtFeCodeRate_4_15:		input_datarate = locked_sym_rate_KSs*mod_fac*4/8/15;	break;
+			case MtFeCodeRate_7_15:		input_datarate = locked_sym_rate_KSs*mod_fac*7/8/15;	break;
+			case MtFeCodeRate_8_15:		input_datarate = locked_sym_rate_KSs*mod_fac*8/8/15;	break;
+			case MtFeCodeRate_11_15:	input_datarate = locked_sym_rate_KSs*mod_fac*11/8/15;	break;
+			case MtFeCodeRate_13_18:	input_datarate = locked_sym_rate_KSs*mod_fac*13/8/18;	break;
+			case MtFeCodeRate_9_20:		input_datarate = locked_sym_rate_KSs*mod_fac*9/8/20;	break;
+			case MtFeCodeRate_11_20:	input_datarate = locked_sym_rate_KSs*mod_fac*11/8/20;	break;
+			case MtFeCodeRate_23_36:	input_datarate = locked_sym_rate_KSs*mod_fac*23/8/36;	break;
+			case MtFeCodeRate_25_36:	input_datarate = locked_sym_rate_KSs*mod_fac*25/8/36;	break;
+			case MtFeCodeRate_11_45:	input_datarate = locked_sym_rate_KSs*mod_fac*11/8/45;	break;
+			case MtFeCodeRate_13_45:	input_datarate = locked_sym_rate_KSs*mod_fac*13/8/45;	break;
+			case MtFeCodeRate_14_45:	input_datarate = locked_sym_rate_KSs*mod_fac*14/8/45;	break;
+			case MtFeCodeRate_26_45:	input_datarate = locked_sym_rate_KSs*mod_fac*26/8/45;	break;
+			case MtFeCodeRate_28_45:	input_datarate = locked_sym_rate_KSs*mod_fac*28/8/45;	break;
+			case MtFeCodeRate_29_45:	input_datarate = locked_sym_rate_KSs*mod_fac*29/8/45;	break;
+			case MtFeCodeRate_31_45:	input_datarate = locked_sym_rate_KSs*mod_fac*31/8/45;	break;
+			case MtFeCodeRate_32_45:	input_datarate = locked_sym_rate_KSs*mod_fac*32/8/45;	break;
+			case MtFeCodeRate_77_90:	input_datarate = locked_sym_rate_KSs*mod_fac*77/8/90;	break;
+			default:					input_datarate = locked_sym_rate_KSs*mod_fac*2/8/3;		break;
+
+		}
+		rs6060_get_ts_mclk(dev,&Mclk_KHz);
+		iSerialMclkHz = input_datarate*49/5;
+		input_datarate = input_datarate *105/100;
+		if(iSerialMclkHz>115200)
+			iSerialMclkHz = 144000;
+		else if(iSerialMclkHz>96000)
+			iSerialMclkHz = 115200;
+		else if(iSerialMclkHz>72000)
+			iSerialMclkHz = 96000;
+		else
+			iSerialMclkHz = 72000;
+		if(input_datarate<6000)
+			input_datarate= 6000;
+		if(input_datarate != 0)
+			divid_ratio = (u16) (Mclk_KHz/input_datarate);
+		else
+			divid_ratio = 0xff;
+		printk("MClk_KHz = %d,divid_ratio = %d \n",Mclk_KHz,divid_ratio);
+
+		if(divid_ratio<8)
+			divid_ratio = 8;
+		if(dev->config.ts_mode == MtFeTsOutMode_Common){
+			if(divid_ratio>27)
+				divid_ratio = 27;
+			if((divid_ratio == 14)||(divid_ratio==15))
+				divid_ratio = 13;
+			if((divid_ratio == 19)||(divid_ratio == 20))
+				divid_ratio = 18;
+		}else{
+			if(divid_ratio>24)
+				divid_ratio = 24;
+			if((divid_ratio == 12)||(divid_ratio==13))
+				divid_ratio = 11;
+			if((divid_ratio == 19)||(divid_ratio == 20))
+				divid_ratio = 18;
+		}
+		tmp1 = (u8) ((divid_ratio/2)-1);
+		tmp2 = DIV_ROUND_UP(divid_ratio,2)-1;
+
+		tmp1 &= 0x3f;
+		tmp2 &= 0x3f;
+		val = (tmp1 >>2)&0x0f;
+		regmap_update_bits(dev->regmap,0xfe,0x0f,val);
+		val = (u8)(((tmp1&0x3)<<6)|tmp2);
+		regmap_write(dev->regmap,0xea,val);
+
+	}
+	else{    //dvbs
+	  mod_fac = 2;
+
+	  switch(p_info.code_rate){
+	  	case MtFeCodeRate_1_2:		input_datarate = locked_sym_rate_KSs*mod_fac/2/8;		break;
+		case MtFeCodeRate_2_3:		input_datarate = locked_sym_rate_KSs*mod_fac*2/3/8;		break;
+		case MtFeCodeRate_3_4:		input_datarate = locked_sym_rate_KSs*mod_fac*3/4/8;		break;
+		case MtFeCodeRate_5_6:		input_datarate = locked_sym_rate_KSs*mod_fac*5/6/8;		break;
+		case MtFeCodeRate_7_8:		input_datarate = locked_sym_rate_KSs*mod_fac*7/8/8;		break;
+		default:		input_datarate = locked_sym_rate_KSs*mod_fac*3/4/8;		break;
+
+	  }
+		rs6060_get_ts_mclk(dev,&Mclk_KHz);
+		iSerialMclkHz = input_datarate*46/5;
+		input_datarate = input_datarate *105/100;
+
+		if(iSerialMclkHz>72000)
+			iSerialMclkHz = 96000;
+		else
+			iSerialMclkHz = 72000;
+
+		if(input_datarate<6000)
+			input_datarate = 6000;
+		if(input_datarate != 0)
+			divid_ratio = (u16)(Mclk_KHz/input_datarate);
+		else
+			divid_ratio = 0xff;
+		if(divid_ratio<8)
+			divid_ratio = 8;
+		if(dev->config.ts_mode == MtFeTsOutMode_Common){
+			if(divid_ratio>27)
+				divid_ratio=27;
+			}
+		else {
+			if (divid_ratio>24)
+				divid_ratio =24;
+			}
+		tmp1 = (u8)((divid_ratio/2)-1);
+		tmp2 = DIV_ROUND_UP(divid_ratio,2)-1;
+
+		tmp1 &= 0x3f;
+		tmp2 &= 0x3f;
+		val = (tmp1 >>2)&0x0f;
+		regmap_update_bits(dev->regmap,0xfe,0x0f,val);
+		val = (u8)(((tmp1&0x3)<<6)|tmp2);
+		regmap_write(dev->regmap,0xea,val);		
+	}
+	return 0;	
+}
 static int m88rs6060_read_status(struct dvb_frontend *fe,
 				 enum fe_status *status)
 {
@@ -1294,6 +1912,10 @@ static int m88rs6060_read_status(struct dvb_frontend *fe,
 	dev->fe_status = *status;
 	dev_dbg(&client->dev, "lock=%02x status=%02x\n", utmp, *status);
 
+	if ((dev->fe_status & FE_HAS_LOCK)&&(dev->TsClockChecked)){
+		dev->TsClockChecked = false;
+		m88rs6060_set_clock_ratio(dev);
+	}
 	/*power of rf signal */
 	m88rs6060_get_gain(dev, c->frequency / 1000, &gain);
 	c->strength.len = 2;
@@ -1516,6 +2138,42 @@ static int m88rs6060_read_signal_strength(struct dvb_frontend *fe,
 			*strength = (u16)p->strength.stat[i].uvalue;
 
 	return 0;
+}
+
+static int m88rs6060_set_voltage(struct dvb_frontend*fe,
+								enum fe_sec_voltage voltage)
+{
+	struct m88rs6060_dev *dev = fe->demodulator_priv;
+	struct i2c_client *client = dev->demod_client;
+	int ret;
+	u8 utmp;
+	bool voltage_sel, lnb_power;
+
+	
+	switch(voltage){
+		case SEC_VOLTAGE_18:
+			voltage_sel = 1;
+			lnb_power = 1;
+			break;
+		case SEC_VOLTAGE_13:
+			voltage_sel = 0;
+			lnb_power = 1;		
+			break;
+		case SEC_VOLTAGE_OFF:
+			voltage_sel = 0;
+			lnb_power = 0;		
+			break;
+	}
+	utmp = lnb_power << 1 | voltage_sel << 0;
+	ret = m88rs6060_update_bits(dev, 0xa2, 0x03, utmp);
+	if (ret)
+		goto err;
+
+	return 0;
+err:
+	dev_dbg(&client->dev, "failed=%d\n", ret);
+	return ret;
+	
 }
 
 static int m88rs6060_set_tone(struct dvb_frontend *fe,
@@ -1770,7 +2428,7 @@ static const struct dvb_frontend_ops m88rs6060_ops = {
 	.read_ber = m88rs6060_read_ber,
 	.read_signal_strength = m88rs6060_read_signal_strength,
 	.read_snr = m88rs6060_read_snr,
-
+	.set_voltage = m88rs6060_set_voltage,
 	.set_tone = m88rs6060_set_tone,
 	.diseqc_send_burst = m88rs6060_diseqc_send_burst,
 	.diseqc_send_master_cmd = m88rs6060_diseqc_send_master_cmd,
@@ -1810,7 +2468,7 @@ static int m88rs6060_probe(struct i2c_client *client,
 	dev->config.write_properties = cfg->write_properties;
 	dev->config.envelope_mode = cfg->envelope_mode;
 	dev->demod_client = client;
-
+	dev->TsClockChecked = false;
 	dev->regmap = devm_regmap_init_i2c(dev->demod_client, &regmap_config);
 	if (IS_ERR(dev->regmap)) {
 		ret = PTR_ERR(dev->regmap);
@@ -1820,8 +2478,8 @@ static int m88rs6060_probe(struct i2c_client *client,
 	ret = regmap_read(dev->regmap, 0x00, &tmp);
 	if (ret)
 		goto err_regmap_0_regmap_exit;
-	if (tmp != 0xe2)
-		goto err_regmap_0_regmap_exit;
+//	if (tmp != 0xe2)
+//		goto err_regmap_0_regmap_exit;
 
 	dev->tuner_client =
 	    i2c_new_dummy_device(client->adapter, dev->config.tuner_adr);
@@ -1855,6 +2513,7 @@ static int m88rs6060_probe(struct i2c_client *client,
 	regmap_exit(dev->regmap);
  err_kfree:
 	kfree(dev);
+	
 	dev_warn(&client->dev, "probe failed = %d\n", ret);
 	return ret;
 }
@@ -1864,8 +2523,8 @@ static int m88rs6060_remove(struct i2c_client *client)
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	dev_dbg(&client->dev, "\n");
 
-	i2c_unregister_device(dev->demod_client);
-	i2c_unregister_device(dev->tuner_client);
+	if(dev->tuner_client)
+	   i2c_unregister_device(dev->tuner_client);
 
 	dev->fe.ops.release = NULL;
 	dev->fe.demodulator_priv = NULL;
