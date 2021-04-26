@@ -24,6 +24,7 @@ struct m88rs6060_dev {
 	struct dvb_frontend fe;
 	struct m88rs6060_cfg config;
 
+	bool TsClockChecked;  //clock retio
 	bool warm;		// for the init and download fw
 	s32 mclk;		/*main mclk */
 
