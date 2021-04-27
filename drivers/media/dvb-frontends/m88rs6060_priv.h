@@ -8,6 +8,13 @@
 
 #include "m88rs6060.h"
 
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
 #define M88RS6060_FIRMWARE "dvb-demod-m88rs6060.fw"
 
 //Improve the driver capability or not
