@@ -369,7 +369,7 @@ static int m88rs6060_fireware_download(struct m88rs6060_dev *dev, u8 reg,
 {
 	struct i2c_client *client = dev->demod_client;
 	int ret;
-    u8 buf[50];
+    u8 buf[70];
     struct i2c_msg msg = {
 		.addr = dev->config.demod_adr,.flags = 0,.buf = buf,.len =
 		    len + 1
@@ -1423,7 +1423,7 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	rs6060_set_reg(dev, 0x5c, 0xf4);
 	rs6060_set_reg(dev, 0x60, 0xcb);
 
-	for (i = 0; i < 250; i++) {
+	for (i = 0; i < 50; i++) {
 		regmap_read(dev->regmap, 0x8, &tmp);
 		regmap_read(dev->regmap, 0xd, &tmp1);
 
@@ -1477,87 +1477,7 @@ static int m88rs6060_init(struct dvb_frontend *fe)
 	struct m88rs6060_dev *dev = fe->demodulator_priv;
 	struct i2c_client *client = dev->demod_client;
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
-	int ret, len, rem;
-	const struct firmware *firmware;
-	const char *name = M88RS6060_FIRMWARE;
-	unsigned val;
 
-	dev_dbg(&client->dev, "%s", __func__);
-
-	if (dev->warm)
-		goto warm_start;
-
-	//rest the harware and wake up the demod and tuner;
-	m88rs6060_hard_rest(dev);
-	rs6060_init(dev);
-
-	ret = regmap_write(dev->regmap, 0x07, 0xe0);	//global reset ,diseqc and fec reset
-	if (ret)
-		goto err;
-	ret = regmap_write(dev->regmap, 0x07, 0x00);
-	if (ret)
-		goto err;
-
-	/* cold state - try to download firmware */
-	dev_info(&client->dev, "found a '%s' in cold state\n",
-		 dev->fe.ops.info.name);
-
-	/* request the firmware, this will block and timeout */
-	ret = request_firmware(&firmware, name, &client->dev);
-	if (ret) {
-		dev_err(&client->dev, "firmware file '%s' not found\n", name);
-		goto err;
-	}
-
-	dev_info(&client->dev, "downloading firmware from file '%s'\n", name);
-
-	ret = regmap_write(dev->regmap, 0xb2, 0x01);
-	if (ret)
-		goto err_release_firmware;
-
-	dev_dbg(&client->dev, " firmware size  = %lu data %02x %02x %02x\n",
-		 firmware->size, firmware->data[0], firmware->data[1],
-		 firmware->data[2]);
-
-	for (rem = firmware->size; rem > 0; rem -= (dev->config.i2c_wr_max - 1)) {
-		len = min(dev->config.i2c_wr_max - 1, rem);
-		ret = m88rs6060_fireware_download(dev, 0xb0,
-						  &firmware->data[firmware->size - rem],
-						  len);
-		if (ret) {
-			dev_err(&client->dev,
-				"firmware download failed  len  %d  %d\n", len,
-				ret);
-			goto err_release_firmware;
-		}
-	}
-
-	ret = regmap_write(dev->regmap, 0xb2, 0x00);
-	if (ret)
-		goto err_release_firmware;
-
-	release_firmware(firmware);
-
-	ret = regmap_read(dev->regmap, 0xb9, &val);
-	if (ret)
-		goto err;
-
-	if (!val) {
-		ret = -EINVAL;
-		dev_info(&client->dev, "firmware did not run\n");
-		goto err;
-	}
-
-	dev_info(&client->dev, "found a '%s' in warm state\n",
-		 dev->fe.ops.info.name);
-	dev_info(&client->dev, "firmware version:%X\n", val);
-	msleep(5);
-	m88res6060_set_ts_mode(dev);
-
-	regmap_read(dev->regmap, 0x4d, &val);
-	regmap_write(dev->regmap, 0x4d, val & 0xfd);
-
- warm_start:
 	/*warm state */
 	dev->warm = true;
 
@@ -1572,12 +1492,6 @@ static int m88rs6060_init(struct dvb_frontend *fe)
 	dev_info(&client->dev, "%s finished\n", __func__);
 
 	return 0;
-
- err_release_firmware:
-	release_firmware(firmware);
- err:
-	dev_dbg(&client->dev, "failed=%d\n", ret);
-	return ret;
 
 }
 static int m88rs6060_get_sym_rate(struct m88rs6060_dev *dev,
@@ -2436,7 +2350,94 @@ static const struct dvb_frontend_ops m88rs6060_ops = {
 	.spi_write = m88rs6060_spi_write,
 
 };
+static int m88rs6060_ready(struct m88rs6060_dev *dev)
+{
+	struct i2c_client *client = dev->demod_client;
+	int ret, len, rem;
+	const struct firmware *firmware;
+	const char *name = M88RS6060_FIRMWARE;
+	unsigned val;
 
+	dev_dbg(&client->dev, "%s", __func__);
+
+	//rest the harware and wake up the demod and tuner;
+	m88rs6060_hard_rest(dev);
+	rs6060_init(dev);
+
+	ret = regmap_write(dev->regmap, 0x07, 0xe0);	//global reset ,diseqc and fec reset
+	if (ret)
+		goto err;
+	ret = regmap_write(dev->regmap, 0x07, 0x00);
+	if (ret)
+		goto err;
+
+	/* cold state - try to download firmware */
+	dev_info(&client->dev, "found a '%s' in cold state\n",
+		 dev->fe.ops.info.name);
+
+	/* request the firmware, this will block and timeout */
+	ret = request_firmware(&firmware, name, &client->dev);
+	if (ret) {
+		dev_err(&client->dev, "firmware file '%s' not found\n", name);
+		goto err;
+	}
+
+	dev_info(&client->dev, "downloading firmware from file '%s'\n", name);
+
+	ret = regmap_write(dev->regmap, 0xb2, 0x01);
+	if (ret)
+		goto err_release_firmware;
+
+	dev_dbg(&client->dev, " firmware size  = %lu data %02x %02x %02x\n",
+		 firmware->size, firmware->data[0], firmware->data[1],
+		 firmware->data[2]);
+
+	for (rem = firmware->size; rem > 0; rem -= (dev->config.i2c_wr_max - 1)) {
+		len = min(dev->config.i2c_wr_max - 1, rem);
+		ret = m88rs6060_fireware_download(dev, 0xb0,
+						  &firmware->data[firmware->size - rem],
+						  len);
+		if (ret) {
+			dev_err(&client->dev,
+				"firmware download failed  len  %d  %d\n", len,
+				ret);
+			goto err_release_firmware;
+		}
+	}
+
+	ret = regmap_write(dev->regmap, 0xb2, 0x00);
+	if (ret)
+		goto err_release_firmware;
+
+	release_firmware(firmware);
+
+	ret = regmap_read(dev->regmap, 0xb9, &val);
+	if (ret)
+		goto err;
+
+	if (!val) {
+		ret = -EINVAL;
+		dev_info(&client->dev, "firmware did not run\n");
+		goto err;
+	}
+
+	dev_info(&client->dev, "found a '%s' in warm state\n",
+		 dev->fe.ops.info.name);
+	dev_info(&client->dev, "firmware version:%X\n", val);
+	msleep(5);
+	m88res6060_set_ts_mode(dev);
+
+	regmap_read(dev->regmap, 0x4d, &val);
+	regmap_write(dev->regmap, 0x4d, val & 0xfd);
+
+	return 0;
+ err_release_firmware:
+	release_firmware(firmware);
+ err:
+	dev_dbg(&client->dev, "failed=%d\n", ret);
+	return ret;
+	
+}
 static int m88rs6060_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
@@ -2505,6 +2506,8 @@ static int m88rs6060_probe(struct i2c_client *client,
 
 	dev_dbg(&client->dev, "found the chip of %s.", m88rs6060_ops.info.name);
 
+	//ready chip
+	m88rs6060_ready(dev);
 	return 0;
 
  err_client_1_i2c_unregister_device:
