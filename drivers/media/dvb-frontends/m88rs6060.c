@@ -1252,7 +1252,7 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	msleep(2);
 	/*clear ts */
 	regmap_write(dev->regmap, 0xf5, 0x00);
-
+	msleep(2);
 	regmap_read(dev->regmap, 0xb2, &tmp);
 	if (tmp == 0x01) {
 		regmap_write(dev->regmap, 0x00, 0x0);
@@ -1611,7 +1611,70 @@ static int m88rs6060_get_channel_info(struct m88rs6060_dev *dev,
 
 	return 0;
 }
+static int rs6060_select_xm(struct m88rs6060_dev*dev,u32 *xm_KHz)
+{
+	u32 symbol_rate = 0;
+	u8 reg16;
+	u32 offset_KHz[8] = {0};
+	u32 max_offset = 0;
+	u8 i, xm_line, xm_cnt = 5;
+	u32 xm_list_KHz[3][8] = {
+							{96000, 102400, 107162, 109714, 115200, 128000, 135529, 144000},
+							{93000,  99200, 111600, 117473, 124000, 139500, 144000, 148800},
+							{99000, 105600, 108000, 110511, 118800, 132000, 144000, 148500}
+						   };
 
+
+	
+	m88rs6060_get_sym_rate(dev,&symbol_rate);
+	xm_cnt = sizeof(xm_list_KHz) / sizeof(u32);
+	xm_cnt /= 3;
+	// C = (symbol * 1.35 / 2 + 2) * 1.1;
+	symbol_rate *= 135;
+	symbol_rate /= 200;
+	symbol_rate += 2000;
+	symbol_rate *= 110;
+	symbol_rate /= 100;
+
+	reg16 = rs6060_get_reg(dev, 0x16);
+
+	if(reg16 == 92){
+		xm_line = 1;
+	}
+	else if(reg16 == 100){
+		xm_line = 2;
+	}
+	else{//if(reg16 == 96)
+		xm_line = 0;
+	}
+
+	for(i = 0; i < xm_cnt; i ++){
+		if(*xm_KHz > xm_list_KHz[xm_line][i])
+		{
+			continue;
+		}
+		offset_KHz[i] = (dev->frequecy % xm_list_KHz[xm_line][i]);
+		if(offset_KHz[i] > (xm_list_KHz[xm_line][i] / 2))
+			offset_KHz[i] = xm_list_KHz[xm_line][i] - offset_KHz[i];
+		if(offset_KHz[i] > symbol_rate)
+		{
+			*xm_KHz = xm_list_KHz[xm_line][i];
+			break;
+		}
+		if(offset_KHz[i] > max_offset)
+		{
+			max_offset = offset_KHz[i];
+			*xm_KHz = xm_list_KHz[xm_line][i];
+		}
+	 }
+
+	if(i == xm_cnt)
+	{
+		*xm_KHz = xm_list_KHz[xm_line][xm_cnt - 1];
+	}
+
+	return 0;
+}
 static int m88rs6060_set_clock_ratio(struct m88rs6060_dev*dev )
 {
 	unsigned mod_fac,tmp1,tmp2,val;
@@ -1683,51 +1746,73 @@ static int m88rs6060_set_clock_ratio(struct m88rs6060_dev*dev )
 
 		}
 		rs6060_get_ts_mclk(dev,&Mclk_KHz);
-		iSerialMclkHz = input_datarate*49/5;
-		input_datarate = input_datarate *105/100;
-		if(iSerialMclkHz>115200)
-			iSerialMclkHz = 144000;
-		else if(iSerialMclkHz>96000)
-			iSerialMclkHz = 115200;
-		else if(iSerialMclkHz>72000)
-			iSerialMclkHz = 96000;
-		else
-			iSerialMclkHz = 72000;
-		if(input_datarate<6000)
-			input_datarate= 6000;
-		if(input_datarate != 0)
-			divid_ratio = (u16) (Mclk_KHz/input_datarate);
-		else
-			divid_ratio = 0xff;
-		printk("MClk_KHz = %d,divid_ratio = %d \n",Mclk_KHz,divid_ratio);
+		if(dev->config.ts_mode==MtFeTsOutMode_Serial){
+			u32 target_mclk = Mclk_KHz;
+			input_datarate*=8;
 
-		if(divid_ratio<8)
-			divid_ratio = 8;
-		if(dev->config.ts_mode == MtFeTsOutMode_Common){
-			if(divid_ratio>27)
-				divid_ratio = 27;
-			if((divid_ratio == 14)||(divid_ratio==15))
-				divid_ratio = 13;
-			if((divid_ratio == 19)||(divid_ratio == 20))
-				divid_ratio = 18;
+		//	target_mclk = input_datarate;
+				rs6060_select_xm(dev,&target_mclk);
+			if(target_mclk != Mclk_KHz){
+				regmap_write(dev->regmap,0x06,0xe0);
+				rs6060_set_ts_mclk(dev,target_mclk);
+				regmap_write(dev->regmap,0x06,0x00);
+			}
+
+			rs6060_get_ts_mclk(dev,&iSerialMclkHz);
+			if(iSerialMclkHz>116000)
+				regmap_write(dev->regmap,0x0a,0x01);
+			else
+				regmap_write(dev->regmap,0x0a,0x00);
+
+	
 		}else{
-			if(divid_ratio>24)
-				divid_ratio = 24;
-			if((divid_ratio == 12)||(divid_ratio==13))
-				divid_ratio = 11;
-			if((divid_ratio == 19)||(divid_ratio == 20))
-				divid_ratio = 18;
-		}
-		tmp1 = (u8) ((divid_ratio/2)-1);
-		tmp2 = DIV_ROUND_UP(divid_ratio,2)-1;
+		
+			iSerialMclkHz = input_datarate*49/5;
+			input_datarate = input_datarate *105/100;
+			if(iSerialMclkHz>115200)
+				iSerialMclkHz = 144000;
+			else if(iSerialMclkHz>96000)
+				iSerialMclkHz = 115200;
+			else if(iSerialMclkHz>72000)
+				iSerialMclkHz = 96000;
+			else
+				iSerialMclkHz = 72000;
+			if(input_datarate<6000)
+				input_datarate= 6000;
+			if(input_datarate != 0)
+				divid_ratio = (u16) (Mclk_KHz/input_datarate);
+			else
+				divid_ratio = 0xff;
+			printk("MClk_KHz = %d,divid_ratio = %d \n",Mclk_KHz,divid_ratio);
 
+			if(divid_ratio<8)
+				divid_ratio = 8;
+			if(dev->config.ts_mode == MtFeTsOutMode_Common){
+				if(divid_ratio>27)
+					divid_ratio = 27;
+				if((divid_ratio == 14)||(divid_ratio==15))
+					divid_ratio = 13;
+				if((divid_ratio == 19)||(divid_ratio == 20))
+					divid_ratio = 18;
+			}else{
+				if(divid_ratio>24)
+					divid_ratio = 24;
+				if((divid_ratio == 12)||(divid_ratio==13))
+					divid_ratio = 11;
+				if((divid_ratio == 19)||(divid_ratio == 20))
+					divid_ratio = 18;
+			}
+			tmp1 = (u8) ((divid_ratio/2)-1);
+			tmp2 = DIV_ROUND_UP(divid_ratio,2)-1;
+		
+		
 		tmp1 &= 0x3f;
 		tmp2 &= 0x3f;
 		val = (tmp1 >>2)&0x0f;
 		regmap_update_bits(dev->regmap,0xfe,0x0f,val);
 		val = (u8)(((tmp1&0x3)<<6)|tmp2);
 		regmap_write(dev->regmap,0xea,val);
-
+		}
 	}
 	else{    //dvbs
 	  mod_fac = 2;
@@ -1742,39 +1827,60 @@ static int m88rs6060_set_clock_ratio(struct m88rs6060_dev*dev )
 
 	  }
 		rs6060_get_ts_mclk(dev,&Mclk_KHz);
-		iSerialMclkHz = input_datarate*46/5;
-		input_datarate = input_datarate *105/100;
 
-		if(iSerialMclkHz>72000)
-			iSerialMclkHz = 96000;
-		else
-			iSerialMclkHz = 72000;
+		if(dev->config.ts_mode==MtFeTsOutMode_Serial){
+			u32 target_mclk = Mclk_KHz;
+			input_datarate*=8;
 
-		if(input_datarate<6000)
-			input_datarate = 6000;
-		if(input_datarate != 0)
-			divid_ratio = (u16)(Mclk_KHz/input_datarate);
-		else
-			divid_ratio = 0xff;
-		if(divid_ratio<8)
-			divid_ratio = 8;
-		if(dev->config.ts_mode == MtFeTsOutMode_Common){
-			if(divid_ratio>27)
-				divid_ratio=27;
+		//	target_mclk = input_datarate;
+				rs6060_select_xm(dev,&target_mclk);
+			if(target_mclk != Mclk_KHz){
+				regmap_write(dev->regmap,0x06,0xe0);
+				rs6060_set_ts_mclk(dev,target_mclk);
+				regmap_write(dev->regmap,0x06,0x00);
 			}
-		else {
-			if (divid_ratio>24)
-				divid_ratio =24;
-			}
-		tmp1 = (u8)((divid_ratio/2)-1);
-		tmp2 = DIV_ROUND_UP(divid_ratio,2)-1;
 
-		tmp1 &= 0x3f;
-		tmp2 &= 0x3f;
-		val = (tmp1 >>2)&0x0f;
-		regmap_update_bits(dev->regmap,0xfe,0x0f,val);
-		val = (u8)(((tmp1&0x3)<<6)|tmp2);
-		regmap_write(dev->regmap,0xea,val);		
+			rs6060_get_ts_mclk(dev,&iSerialMclkHz);
+			if(iSerialMclkHz>116000)
+				regmap_write(dev->regmap,0x0a,0x01);
+			else
+				regmap_write(dev->regmap,0x0a,0x00);
+			
+		  }else{
+				iSerialMclkHz = input_datarate*46/5;
+				input_datarate = input_datarate *105/100;
+
+				if(iSerialMclkHz>72000)
+					iSerialMclkHz = 96000;
+				else
+					iSerialMclkHz = 72000;
+
+				if(input_datarate<6000)
+					input_datarate = 6000;
+				if(input_datarate != 0)
+					divid_ratio = (u16)(Mclk_KHz/input_datarate);
+				else
+					divid_ratio = 0xff;
+				if(divid_ratio<8)
+					divid_ratio = 8;
+				if(dev->config.ts_mode == MtFeTsOutMode_Common){
+					if(divid_ratio>27)
+						divid_ratio=27;
+					}
+				else {
+					if (divid_ratio>24)
+						divid_ratio =24;
+					}
+				tmp1 = (u8)((divid_ratio/2)-1);
+				tmp2 = DIV_ROUND_UP(divid_ratio,2)-1;
+
+				tmp1 &= 0x3f;
+				tmp2 &= 0x3f;
+				val = (tmp1 >>2)&0x0f;
+				regmap_update_bits(dev->regmap,0xfe,0x0f,val);
+				val = (u8)(((tmp1&0x3)<<6)|tmp2);
+				regmap_write(dev->regmap,0xea,val);		
+			}
 	}
 	return 0;	
 }
@@ -1828,6 +1934,7 @@ static int m88rs6060_read_status(struct dvb_frontend *fe,
 
 	if ((dev->fe_status & FE_HAS_LOCK)&&(dev->TsClockChecked)){
 		dev->TsClockChecked = false;
+		dev->frequecy = c->frequency;
 		m88rs6060_set_clock_ratio(dev);
 	}
 	/*power of rf signal */
