@@ -1891,10 +1891,10 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	unsigned tsid[16];
 	bool mis = false;
 
-	dev_info(&client->dev,
-		 "delivery_system=%u modulation=%u frequency=%u bandwidth_hz=%u symbol_rate=%u inversion=%u stream_id=%d\n",
-		 c->delivery_system, c->modulation, c->frequency,
-		 c->bandwidth_hz, c->symbol_rate, c->inversion, c->stream_id);
+	//dev_info(&client->dev,
+	//	 "delivery_system=%u modulation=%u frequency=%u bandwidth_hz=%u symbol_rate=%u inversion=%u stream_id=%d\n",
+	//	 c->delivery_system, c->modulation, c->frequency,
+	//	 c->bandwidth_hz, c->symbol_rate, c->inversion, c->stream_id);
 
 	if (!dev->warm) {
 		ret = -EAGAIN;
