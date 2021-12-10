@@ -1465,7 +1465,6 @@ static int cxd2878_set_dvbt(struct dvb_frontend *fe)
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	int ret= 0;
 
-	printk("%s: here\n",__FUNCTION__);
 	dev->bandwidth = (enum sony_dtv_bandwidth_t)(c->bandwidth_hz/1000000);
 	
 
@@ -1964,8 +1963,7 @@ static int cxd2878_set_dvbc(struct dvb_frontend *fe)
 	struct cxd2878_dev *dev = fe->demodulator_priv;
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	int ret= 0;
-	printk("%s: here\n",__FUNCTION__);
-
+	
 	dev->bandwidth = SONY_DTV_BW_8_MHZ;
 	if ((dev->state == SONY_DEMOD_STATE_ACTIVE) && (dev->system == SONY_DTV_SYSTEM_DVBC)) {
 
