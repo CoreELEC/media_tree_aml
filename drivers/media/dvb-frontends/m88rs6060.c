@@ -2084,13 +2084,13 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	rs6060_set_reg(dev, 0x5c, 0xf4);
 	rs6060_set_reg(dev, 0x60, 0xcb);
 
-	for (i = 0; i < 50; i++) {
+	for (i = 0; i < 150; i++) {
 		regmap_read(dev->regmap, 0x8, &tmp);
 		regmap_read(dev->regmap, 0xd, &tmp1);
 
 		if ((tmp1 == 0x8f) || (tmp1 == 0xf7))
 			break;
-		msleep(2);
+		msleep(20);
 	}
 
 	if (tmp1 == 0x8f) {
