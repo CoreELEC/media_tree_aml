@@ -515,7 +515,7 @@ static int meson_dvb_remove(struct platform_device *pdev)
 }
 static const struct of_device_id meson_dvb_dt_match[] = {
 	{
-		.compatible = "amlogic,dvb",
+		.compatible = "amlogic, dvb-demux",
 	},
 	{},
 };
