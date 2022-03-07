@@ -954,16 +954,16 @@ static int cxd2878_setTSClkModeAndFreq(struct cxd2878_dev *dev)
     };
     /* NOTE: For ISDB-S3, OREG_CKSEL_TSTLVIF should be 1 */
 
-    struct sony_demod_ts_clk_configuration_t backwardsCompatibleSerialTSClkSetting [2] =
-    {  /* OSERCKMODE  OSERDUTYMODE  OTSCKPERIOD  OREG_CKSEL_TSTLVIF                         */
-        {      3,          1,            8,             1        }, /* Gated Clock          */
-        {      1,          1,            8,             1        }  /* Continuous Clock     */
-    };
+//    struct sony_demod_ts_clk_configuration_t backwardsCompatibleSerialTSClkSetting [2] =
+ //   {  /* OSERCKMODE  OSERDUTYMODE  OTSCKPERIOD  OREG_CKSEL_TSTLVIF                         */
+ //       {      3,          1,            8,             1        }, /* Gated Clock          */
+  //      {      1,          1,            8,             1        }  /* Continuous Clock     */
+ //   };
 
-    struct sony_demod_ts_clk_configuration_t backwardsCompatibleParallelTSClkSetting =
-    {  /* OSERCKMODE  OSERDUTYMODE  OTSCKPERIOD  OREG_CKSEL_TSTLVIF */
-               0,          0,            8,             1
-    };	
+//    struct sony_demod_ts_clk_configuration_t backwardsCompatibleParallelTSClkSetting =
+//    {  /* OSERCKMODE  OSERDUTYMODE  OTSCKPERIOD  OREG_CKSEL_TSTLVIF */
+//               0,          0,            8,             1
+ //   };	
 	
 	ret = cxd2878_wr(dev,dev->slvt,0x00,0x00);
 	if(ret)
@@ -2174,7 +2174,9 @@ static int cxd2878_set_isdbt(struct dvb_frontend *fe)
 	dev->bandwidth = (enum sony_dtv_bandwidth_t)(c->bandwidth_hz/1000000);
     if ((dev->state == SONY_DEMOD_STATE_ACTIVE) && (dev->system == SONY_DTV_SYSTEM_ISDBT)) {
         /* Demodulator Active and set to ISDB-T mode */
-              
+        cxd2878_wr(dev,dev->slvt,0x00,0x00);    
+        cxd2878_wr(dev,dev->slvt,0xc3,0x01);
+        SLtoAIT_BandSetting(dev);    
 
     }
     else if((dev->state == SONY_DEMOD_STATE_ACTIVE) && (dev->system != SONY_DTV_SYSTEM_ISDBT)){
@@ -2424,7 +2426,6 @@ err:
 static int cxd2878_set_atsc(struct dvb_frontend *fe)
 {	
 	struct cxd2878_dev *dev = fe->demodulator_priv;
-	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	int ret= 0;
 
 	dev->bandwidth = SONY_DTV_BW_6_MHZ;
@@ -2733,9 +2734,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe,
 		u8 rdata[4]; 
 		u32 packeterr=0,period = 0,Q = 0,R=0;
 		u8 datapacketerr[6],datapacketnum[2];
-		u8 overflow = 0,ecnten = 0;
-		u32 biterror,blocks;
-		u32 Div;
+
 		switch(c->delivery_system){
 		  case SYS_DVBT:
 		    cxd2878_wr(dev,dev->slvt,0x00,0x10);
@@ -2803,53 +2802,11 @@ static int cxd2878_read_status(struct dvb_frontend *fe,
 				break;
 			case SYS_ATSC:
 			   	cxd2878_wr(dev,dev->slvm,0x00,0x0D);
-				cxd2878_rdm(dev,dev->slvm,0x90,rdata,3);
-				overflow = (rdata[2]&0x40)?1:0;
-				biterror = ((u32)(rdata[2]&0x1F)<<16)|((u32)(rdata[1]&0xFF)<<8)|rdata[0];
-				if(overflow)
-					per = 1000000;
-			   	cxd2878_wr(dev,dev->slvm,0x00,0x0D);				
-				cxd2878_rdm(dev,dev->slvm,0x9A,rdata,3);
-				blocks = ((u32)(rdata[2]&0x1F)<<16)|((u32)(rdata[1]&0xFF)<<8)|rdata[0];
-				if(blocks<0xfffff){
-					Div = blocks*207;
-					Q = biterror*1000/Div;
-					R = (biterror*1000)%Div;
-					R*=5;
-					Q = (Q*5)+(R/Div);
-					R = R%Div;
-					R*=5;
-					Q = (Q*5)+(R/Div);
-					R = R%Div;
-					R*=5;
-					Q = (Q*5)+(R/Div);
-					R = R%Div;
-					R*=10;
-					Q = (Q*10)+(R/Div);
-					R = R%Div;
-					if(R<=(Div/2))
-						per =Q;
-					else
-						per = Q+1;
-					}
-				else{
-					Div = blocks*207/16;
-					Q = biterror*625/Div;
-					R = (biterror*625)%Div;
-					R*=5;
-					Q = (Q*5)+(R/Div);
-					R = R%Div;
-					R*=5;
-					Q = (Q*5)+(R/Div);
-					R = R%Div;
-					R*=5;
-					Q = (Q*5)+(R/Div);
-					R = R%Div;
-					if(R<=(Div/2))
-						per =Q;
-					else
-						per = Q+1;
-					}
+				cxd2878_rdm(dev,dev->slvm,0x82,rdata,1);
+				if(rdata[0]&0x01)
+					per = rdata[0];
+				else
+					per = 0;
 				break;
 				default:
 				break;
@@ -2875,10 +2832,8 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 {
 	struct cxd2878_dev *dev = fe->demodulator_priv;
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
-	int ret;
-	int stat = 0;
-	int i=0;
-	u8 data[6];
+	int ret = 0;
+
 	dev_dbg(&dev->i2c->dev,
 		"delivery_system=%u modulation=%u frequency=%u bandwidth_hz=%u symbol_rate=%u inversion=%u stream_id=%d\n",
 		c->delivery_system, c->modulation, c->frequency,
@@ -3037,23 +2992,24 @@ static int cxd2878_read_ucblocks(struct dvb_frontend *fe,u32 *ucblocks)
 }
 static void cxd2878_spi_read(struct dvb_frontend *fe, struct ecp3_info *ecp3inf)
 {
-	struct i2c_client *client = fe->demodulator_priv;
-	struct cxd2878_dev *dev = i2c_get_clientdata(client);
+
+	struct cxd2878_dev *dev = fe->demodulator_priv;
 
 
 	if (dev->config->read_properties)
-		dev->config->read_properties(client->adapter,ecp3inf->reg, &(ecp3inf->data));
+		dev->config->read_properties(dev->i2c,ecp3inf->reg, &(ecp3inf->data));
 
 	return ;
 }
 
 static void cxd2878_spi_write(struct dvb_frontend *fe,struct ecp3_info *ecp3inf)
 {
-	struct i2c_client *client = fe->demodulator_priv;
-	struct cxd2878_dev *dev = i2c_get_clientdata(client);
+
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+
 
 	if (dev->config->write_properties)
-		dev->config->write_properties(client->adapter,ecp3inf->reg, ecp3inf->data);
+		dev->config->write_properties(dev->i2c,ecp3inf->reg, ecp3inf->data);
 	return ;
 }
 
