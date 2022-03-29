@@ -1,5 +1,19 @@
 #ifndef _CXD2878_PRIV_H_
 #define _CXD2878_PRIV_H_
+
+#define AUTO         (0xFF) /* For IF_OUT_SEL and AGC_SEL, it means that the value is desided by config flags. */
+								/* For RF_GAIN, it means that RF_GAIN_SEL(SubAddr:0x4E) = 1 */
+#define OFFSET(ofs)  ((u8)(ofs) & 0x1F)
+#define BW_6         (0x00)
+#define BW_7         (0x01)
+#define BW_8         (0x02)
+#define BW_1_7       (0x03)
+
+#define MAX_BIT_PRECISION  5
+#define FRAC_BITMASK      0x1F
+#define LOG2_10_100X            332                     /**< log2 (10) */
+#define LOG2_E_100X             144                     /**< log2 (e) */
+
 //////////////////////////////
  enum sony_ascot3_tv_system_t{
 	SONY_ASCOT3_TV_SYSTEM_UNKNOWN,
@@ -142,24 +156,6 @@ enum sony_dtv_system_t{
     u32 configJ83B_5_06_5_36;      /**< J.83B 5.06/5.36Msps auto selection */
     u32 configJ83B_5_60;           /**< J.83B. 5.6Msps */
 } ;
-struct cxd2878_dev{
-	bool warm; //start
-	struct dvb_frontend fe;
-	struct i2c_adapter *i2c;
-	struct cxd2878_config *config;	
-	enum sony_dtv_system_t system;
-	enum sony_dtv_bandwidth_t bandwidth;
-	enum sony_demod_state_t state;
-	u8 slvt;  //for slvt addr;
-	u8 slvx;	//addr
-	u8 slvr;	//addr
-	u8 slvm;	//addr
-	enum sony_demod_chip_id_t chipid;
-	enum sony_ascot3_chip_id_t tunerid;
-	struct sony_demod_iffreq_config_t iffreqConfig;
 
-	u32 atscNoSignalThresh;
-	u32 atscSignalThresh;
-};
 
 #endif
