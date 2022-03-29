@@ -12,18 +12,44 @@ Copyright (c) 2021 Davin zhang <Davin@tbsdtv.com> www.Turbosight.com
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <media/dvb_frontend.h>
+#include <linux/mutex.h>
 
 #include "cxd2878.h"
 #include "cxd2878_priv.h"
 
-#define AUTO         (0xFF) /* For IF_OUT_SEL and AGC_SEL, it means that the value is desided by config flags. */
-								/* For RF_GAIN, it means that RF_GAIN_SEL(SubAddr:0x4E) = 1 */
-#define OFFSET(ofs)  ((u8)(ofs) & 0x1F)
-#define BW_6         (0x00)
-#define BW_7         (0x01)
-#define BW_8         (0x02)
-#define BW_1_7       (0x03)
 
+static LIST_HEAD(cxdlist);
+
+struct cxd_base{
+	struct list_head cxdlist;
+	struct i2c_adapter *i2c;
+	struct mutex i2c_lock; //for two adapter at the same i2c bus
+	u8 adr		;		// 
+	u32 count	;		//
+	struct cxd2878_config *config;	
+
+};
+
+struct cxd2878_dev{
+	struct cxd_base *base;
+	bool warm; //start
+	struct dvb_frontend fe;
+	enum sony_dtv_system_t system;
+	enum sony_dtv_bandwidth_t bandwidth;
+	enum sony_demod_state_t state;
+	u8 slvt;  //for slvt addr;
+	u8 slvx;	//addr
+	u8 slvr;	//addr
+	u8 slvm;	//addr
+	u8 tuner_addr;
+	enum sony_demod_chip_id_t chipid;
+	enum sony_ascot3_chip_id_t tunerid;
+	struct sony_demod_iffreq_config_t iffreqConfig;
+
+	u32 atscNoSignalThresh;
+	u32 atscSignalThresh;
+	u32 tune_time;
+ };
 /* For CXD2856 or newer generation ICs */
 static	struct sony_ascot3_adjust_param_t g_param_table_ascot3i[SONY_ASCOT3_TV_SYSTEM_NUM] = {
 	/*
@@ -65,10 +91,6 @@ static	struct sony_ascot3_adjust_param_t g_param_table_ascot3i[SONY_ASCOT3_TV_SY
 	{0x00, AUTO, 0x04, 0x02, 0x02, 0x02, 0x01, 0x01, 0x01, 0x00, BW_6,	OFFSET(-5), OFFSET(2),	AUTO, AUTO, 0x00}, /**< SONY_ASCOT3_DTV_J83B_5_6  (J.83B 5.6Msps) */
 	{0x00, AUTO, 0x03, 0x0B, 0x0B, 0x0B, 0x02, 0x02, 0x02, 0x00, BW_8,	OFFSET(2),	OFFSET(1),	AUTO, AUTO, 0x00}  /**< SONY_ASCOT3_DTV_DTMB	  (DTMB) */
 };
-#define MAX_BIT_PRECISION  5
-#define FRAC_BITMASK      0x1F
-#define LOG2_10_100X            332                     /**< log2 (10) */
-#define LOG2_E_100X             144                     /**< log2 (e) */
 
 static const u8 log2LookUp[] = {
     0, /* 0 */ 4,               /* 0.04439 */
@@ -142,9 +164,9 @@ static int cxd2878_wrm(struct cxd2878_dev *dev,u8 addr, u8 reg,u8*buf,u8 len)
 		.buf = b0,
 		.len = len+1,
 	};
-	ret = i2c_transfer(dev->i2c,&msg,1);
+	ret = i2c_transfer(dev->base->i2c,&msg,1);
 	if(ret<0){
-		dev_warn(&dev->i2c->dev,
+		dev_warn(&dev->base->i2c->dev,
 			"%s: i2c wrm err(%i) @0x%02x (len=%d)\n",
 			KBUILD_MODNAME, ret, reg, len);
 		return ret;
@@ -168,9 +190,9 @@ static int cxd2878_rdm(struct cxd2878_dev *dev,u8 addr, u8 reg, u8* buf, u32 len
 			{.addr = addr,.flags = I2C_M_RD,.buf = buf,.len=len}
 	};
 
-	ret = i2c_transfer(dev->i2c, msg, 2);
+	ret = i2c_transfer(dev->base->i2c, msg, 2);
 	if (ret < 0) {
-		dev_warn(&dev->i2c->dev,
+		dev_warn(&dev->base->i2c->dev,
 			"%s: i2c rdm err(%i) @0x%02x (len=%d)\n",
 			KBUILD_MODNAME, ret, addr, len);
 		return ret;
@@ -205,7 +227,7 @@ static int cxd2878_SetRegisterBits(struct cxd2878_dev*dev,
 
 	 return 0;
 err:
-	dev_err(&dev->i2c->dev,"set bank and registerbits error.\n");
+	dev_err(&dev->base->i2c->dev,"set bank and registerbits error.\n");
 	return ret;
 
 }
@@ -224,7 +246,7 @@ static int cxd2878_SetBankAndRegisterBits(struct cxd2878_dev*dev,u8 slaveAddress
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"set bank and registerbits error.\n");
+	dev_err(&dev->base->i2c->dev,"set bank and registerbits error.\n");
 	return ret;
 }
 static int cxd2878_atsc_SlaveRWriteRegister (struct cxd2878_dev*dev,
@@ -281,7 +303,7 @@ static int cxd2878_atsc_SlaveRWriteRegister (struct cxd2878_dev*dev,
    	}
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"cxd2878_atscSlaveRWriteRegister error.\n");
+	dev_err(&dev->base->i2c->dev,"cxd2878_atscSlaveRWriteRegister error.\n");
 	return ret;		
 }
 
@@ -302,7 +324,7 @@ static int slaveRWriteMultiRegisters (struct cxd2878_dev * dev,
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"slaveRWriteMultiRegisters error.\n");
+	dev_err(&dev->base->i2c->dev,"slaveRWriteMultiRegisters error.\n");
 	return ret;
 
 	
@@ -355,7 +377,7 @@ static int cxd2878_atsc_softreset(struct cxd2878_dev *dev)
 	return 0;
 
 err:
-	dev_err(&dev->i2c->dev,"%s :cxd2878_atsc_softreset error! \n",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s :cxd2878_atsc_softreset error! \n",KBUILD_MODNAME);
 	return ret;	
 }
 static int cxd2878_i2c_repeater(struct cxd2878_dev *dev,bool enable)
@@ -371,7 +393,7 @@ static int cxd2878_i2c_repeater(struct cxd2878_dev *dev,bool enable)
 	return 0;
 
 err:
-	dev_err(&dev->i2c->dev,"%s : %sable thee repeater failed! \n",KBUILD_MODNAME,enable?"en":"dis");
+	dev_err(&dev->base->i2c->dev,"%s : %sable thee repeater failed! \n",KBUILD_MODNAME,enable?"en":"dis");
 	return ret;
 }
 
@@ -387,33 +409,33 @@ static int ascot3_read_rssi(struct cxd2878_dev*dev,u32 frequency,s32 *rssi)
 	
 	data[0] = 0xc4;
 	data[1] = 0x41; //(x87 x88)
-	ret = cxd2878_wrm(dev,dev->config->tuner_addr,0x87,data,2);
+	ret = cxd2878_wrm(dev,dev->tuner_addr,0x87,data,2);
 	if(ret)goto err;
 
 	//connect ifagc,startADC
 	data[0] = 0x05;
 	data[1] = 0x01;
-	ret = cxd2878_wrm(dev,dev->config->tuner_addr,0x59,data,2);
+	ret = cxd2878_wrm(dev,dev->tuner_addr,0x59,data,2);
 	if(ret)goto err;
 		
-	ret|=cxd2878_rdm(dev,dev->config->tuner_addr,0x5B,&ifagc,1);
+	ret|=cxd2878_rdm(dev,dev->tuner_addr,0x5B,&ifagc,1);
 
 	//connect rfagc,startADC
 	data[0] = 0x03;
 	data[1] = 0x01;
-	ret |= cxd2878_wrm(dev,dev->config->tuner_addr,0x59,data,2);
+	ret |= cxd2878_wrm(dev,dev->tuner_addr,0x59,data,2);
 	
-	ret|=cxd2878_rdm(dev,dev->config->tuner_addr,0x5B,&rfagc,1);
+	ret|=cxd2878_rdm(dev,dev->tuner_addr,0x5B,&rfagc,1);
 	if(ret)goto err;
 
-	ret |= cxd2878_wr(dev,dev->config->tuner_addr,0x59,0x04);
-	ret |= cxd2878_wr(dev,dev->config->tuner_addr,0x88,0x04);
-	ret |= cxd2878_wr(dev,dev->config->tuner_addr,0x87,0xC0);
+	ret |= cxd2878_wr(dev,dev->tuner_addr,0x59,0x04);
+	ret |= cxd2878_wr(dev,dev->tuner_addr,0x88,0x04);
+	ret |= cxd2878_wr(dev,dev->tuner_addr,0x87,0xC0);
 	if(ret)goto err;
 
 	agcreg_x140 = ifagc*140;
 	
-	cxd2878_rdm(dev,dev->config->tuner_addr,0x69,&tmp,1);
+	cxd2878_rdm(dev,dev->tuner_addr,0x69,&tmp,1);
 	if_bpf_gc_x100 = if_bpf_gc_table[tmp&0xF]*100;
 	
 	if(agcreg_x140>9945)
@@ -479,7 +501,7 @@ static int ascot3_read_rssi(struct cxd2878_dev*dev,u32 frequency,s32 *rssi)
 	return 0;
 
 err:
-	dev_err(&dev->i2c->dev,"%s : ascot3_read_rssi failed! \n",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s : ascot3_read_rssi failed! \n",KBUILD_MODNAME);
 	return ret;
 }
 static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
@@ -579,10 +601,10 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
     }
 	
 	/* Disable IF signal output (IF_OUT_SEL setting) (0x74) */
-	cxd2878_SetRegisterBits( dev,dev->config->tuner_addr, 0x74, 0x02, 0x03);
+	cxd2878_SetRegisterBits( dev,dev->tuner_addr, 0x74, 0x02, 0x03);
 
 	u8 cdata[2] = {0xC4,0x40};
-	cxd2878_wrm(dev,dev->config->tuner_addr,0x87,cdata,2);
+	cxd2878_wrm(dev,dev->tuner_addr,0x87,cdata,2);
 	
 	u8 data[2];	
 	/* Initial setting for internal analog block (0x91, 0x92) */
@@ -593,11 +615,11 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
 		data[0] = 0x10;
 		data[1] = 0x20;
 	}
-	cxd2878_wrm(dev,dev->config->tuner_addr,0x91,data,2);
+	cxd2878_wrm(dev,dev->tuner_addr,0x91,data,2);
     u8 data1[2];
     data1[0] = 0x00;
     data1[1] = (u8)(g_param_table_ascot3i[aSystem].IS_LOWERLOCAL &0x01);
-	cxd2878_wrm(dev,dev->config->tuner_addr,0x9c,data1,2); 
+	cxd2878_wrm(dev,dev->tuner_addr,0x9c,data1,2); 
 	
 	u8 data2[9];
     /* Enable for analog block (0x5E, 0x5F, 0x60) */
@@ -611,7 +633,7 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
 	if((dev->tunerid == SONY_ASCOT3_CHIP_ID_2871A)
             && ((aSystem== SONY_ASCOT3_DTV_DVBC_6) || (aSystem== SONY_ASCOT3_DTV_DVBC_8) || (aSystem== SONY_ASCOT3_DTV_J83B_5_6))){
             /* DVB-C (ASCOT3I) (Fref = 1MHz) */
-            switch(dev->config->tuner_xtal){
+            switch(dev->base->config->tuner_xtal){
             case SONY_ASCOT3_XTAL_16000KHz:
                 data2[4] = 0x10;
                 break;
@@ -627,7 +649,7 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
             }
         }else{
             /* Digital (Fref = 8MHz) */
-            switch(dev->config->tuner_xtal){
+            switch(dev->base->config->tuner_xtal){
             case SONY_ASCOT3_XTAL_16000KHz:
                 data2[4] = 0x02;
                 break;
@@ -643,7 +665,7 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
             }
         }
 		if((aSystem == SONY_ASCOT3_DTV_DVBC_6) || (aSystem == SONY_ASCOT3_DTV_DVBC_8) || (aSystem == SONY_ASCOT3_DTV_J83B_5_6)){
-                if(dev->config->tuner_xtal == SONY_ASCOT3_XTAL_20500KHz){
+                if(dev->base->config->tuner_xtal == SONY_ASCOT3_XTAL_20500KHz){
                     data2[5] = 0x1C;
                 }else{
                     data2[5] = 0x1C;
@@ -652,7 +674,7 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
                 data2[7] = 0x08;
                 data2[8] = 0x1C;
             }else{
-                if(dev->config->tuner_xtal == SONY_ASCOT3_XTAL_20500KHz){
+                if(dev->base->config->tuner_xtal == SONY_ASCOT3_XTAL_20500KHz){
                     data2[5] = 0x8C;
                 }else{
                     data2[5] = 0xB4;
@@ -661,8 +683,8 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
                 data2[7] = 0x08;
                 data2[8] = 0x30;
             }
-			cxd2878_wrm( dev,dev->config->tuner_addr,0x5E, data2, 9);
-			cxd2878_SetRegisterBits(dev,dev->config->tuner_addr,0x67,0x00,0x06);
+			cxd2878_wrm( dev,dev->tuner_addr,0x5E, data2, 9);
+			cxd2878_SetRegisterBits(dev,dev->tuner_addr,0x67,0x00,0x06);
 			u8 data3[17];
 			data3[0] = g_param_table_ascot3i[aSystem].OUTLMT&0x03;
 			if(g_param_table_ascot3i[aSystem].RF_GAIN == AUTO)
@@ -720,12 +742,12 @@ static int ascot3_tune(struct cxd2878_dev*dev,u32 frequency)
 					data3[15] = 0x24;
 					data3[16] = 0x87;			
 			}
-			cxd2878_wrm( dev,dev->config->tuner_addr,0x68, data3, 17);	
+			cxd2878_wrm( dev,dev->tuner_addr,0x68, data3, 17);	
 
 			msleep(50);
 
-			cxd2878_wr(dev,dev->config->tuner_addr,0x88,0x00);
-			cxd2878_wr(dev,dev->config->tuner_addr,0x87,0xC0);
+			cxd2878_wr(dev,dev->tuner_addr,0x88,0x00);
+			cxd2878_wr(dev,dev->tuner_addr,0x87,0xC0);
 			msleep(10);
 			return 0;
 }
@@ -733,7 +755,7 @@ static int ascot3_init(struct cxd2878_dev*dev)
 {
 	int ret;
 	u8 data = 0;
-	ret = cxd2878_rdm(dev,dev->config->tuner_addr,0x7F,&data,1);
+	ret = cxd2878_rdm(dev,dev->tuner_addr,0x7F,&data,1);
 	if(ret)
 		goto err;
 	switch(data&0xF0){
@@ -742,16 +764,16 @@ static int ascot3_init(struct cxd2878_dev*dev)
 			dev->tunerid = SONY_ASCOT3_CHIP_ID_UNKNOWN;
 			break;
 		case 0xE0:  /* ASCOT3I */
-			dev_info(&dev->i2c->dev," Deceted the Tuner chip ASCOT3 ,ID 2878A ");
+			dev_info(&dev->base->i2c->dev," Deceted the Tuner chip ASCOT3 ,ID 2878A ");
 			dev->tunerid = SONY_ASCOT3_CHIP_ID_2871A;
 			break;
 		}
 	//x_pon
 	 u8 cdata[2] ={0x7A,0x01};
-	cxd2878_wrm(dev,dev->config->tuner_addr,0x99,cdata,2);
+	cxd2878_wrm(dev,dev->tuner_addr,0x99,cdata,2);
 
 	u8 adata[20];
-	switch(dev->config->tuner_xtal){
+	switch(dev->base->config->tuner_xtal){
         case SONY_ASCOT3_XTAL_16000KHz:
             adata[0] = 0x10;
             break;
@@ -802,14 +824,14 @@ static int ascot3_init(struct cxd2878_dev*dev)
      adata[18] = 0x0A;
      adata[19] = 0x00;
 
-	 cxd2878_wrm(dev,dev->config->tuner_addr,0x81,adata,sizeof(adata));
+	 cxd2878_wrm(dev,dev->tuner_addr,0x81,adata,sizeof(adata));
 
-	 cxd2878_wr(dev,dev->config->tuner_addr,0x9B,0x00);
+	 cxd2878_wr(dev,dev->tuner_addr,0x9B,0x00);
 	 
 	 msleep(10);
 	 
 	 u8 rdata;
-	 cxd2878_rdm(dev,dev->config->tuner_addr,0x1A,&rdata,1);
+	 cxd2878_rdm(dev,dev->tuner_addr,0x1A,&rdata,1);
 	 if(rdata != 0)
 	 	return rdata;
 	 
@@ -817,17 +839,17 @@ static int ascot3_init(struct cxd2878_dev*dev)
      if(dev->tunerid == SONY_ASCOT3_CHIP_ID_UNKNOWN){
 		 u8 cdata[2] = {0x8C,0x06};
 		
-		 cxd2878_wrm(dev,dev->config->tuner_addr,0x17,cdata,sizeof(cdata));
+		 cxd2878_wrm(dev,dev->tuner_addr,0x17,cdata,sizeof(cdata));
 		 msleep(1);
-		 cxd2878_rdm(dev,dev->config->tuner_addr, 0x19, &data, 1);
+		 cxd2878_rdm(dev,dev->tuner_addr, 0x19, &data, 1);
 		 if(data&0x08)
 		 	dev->tunerid = SONY_ASCOT3_CHIP_ID_2875;
 
 		 if(dev->tunerid == SONY_ASCOT3_CHIP_ID_UNKNOWN){
 			  u8 cdata[2] = {0x96, 0x06}; /* 0x17, 0x18 */
-			 cxd2878_wrm(dev,dev->config->tuner_addr,0x17,cdata,sizeof(cdata));
+			 cxd2878_wrm(dev,dev->tuner_addr,0x17,cdata,sizeof(cdata));
 			 msleep(1);
-			 cxd2878_rdm(dev,dev->config->tuner_addr, 0x19, &data, 1);
+			 cxd2878_rdm(dev,dev->tuner_addr, 0x19, &data, 1);
 			 if(data&0x40)
 			 	dev->tunerid = SONY_ASCOT3_CHIP_ID_2871;
 			 else
@@ -838,52 +860,52 @@ static int ascot3_init(struct cxd2878_dev*dev)
 	  /* VCO current setting */
 	  if(dev->tunerid ==SONY_ASCOT3_CHIP_ID_2871A){
 	  	 u8 cdata[2] = {0x2A, 0x0E}; /* 0x17, 0x18 */
-		 cxd2878_wrm(dev,dev->config->tuner_addr,0x17,cdata,sizeof(cdata));
+		 cxd2878_wrm(dev,dev->tuner_addr,0x17,cdata,sizeof(cdata));
 		 msleep(1);
-		 cxd2878_rdm(dev,dev->config->tuner_addr, 0x19, &data, 1);
-		 cxd2878_wr(dev,dev->config->tuner_addr,0x95, (data&0x0F));
+		 cxd2878_rdm(dev,dev->tuner_addr, 0x19, &data, 1);
+		 cxd2878_wr(dev,dev->tuner_addr,0x95, (data&0x0F));
 	  }
 	  else{
 		  u8 cdata[2] = {0x8D, 0x06};
-		  cxd2878_wrm(dev,dev->config->tuner_addr,0x17,cdata,sizeof(cdata));
+		  cxd2878_wrm(dev,dev->tuner_addr,0x17,cdata,sizeof(cdata));
 		  msleep(1);
-		  cxd2878_rdm(dev,dev->config->tuner_addr, 0x19, &data, 1);
-		  cxd2878_wr(dev,dev->config->tuner_addr,0x95, (u8)(data>>4));
+		  cxd2878_rdm(dev,dev->tuner_addr, 0x19, &data, 1);
+		  cxd2878_wr(dev,dev->tuner_addr,0x95, (u8)(data>>4));
 
 	  }
 	  if(dev->tunerid ==SONY_ASCOT3_CHIP_ID_2871A){ 
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0xB0, 0x00);	  
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0x30, 0xE0);
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0xB1, 0x1E);	  
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0xB3, 0x02);
+		  cxd2878_wr(dev,dev->tuner_addr, 0xB0, 0x00);	  
+		  cxd2878_wr(dev,dev->tuner_addr, 0x30, 0xE0);
+		  cxd2878_wr(dev,dev->tuner_addr, 0xB1, 0x1E);	  
+		  cxd2878_wr(dev,dev->tuner_addr, 0xB3, 0x02);
 		  msleep(1);
-		  cxd2878_rdm(dev,dev->config->tuner_addr, 0xB4, &data, 1);	  
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0xB3, 0x00);
+		  cxd2878_rdm(dev,dev->tuner_addr, 0xB4, &data, 1);	  
+		  cxd2878_wr(dev,dev->tuner_addr, 0xB3, 0x00);
 		  msleep(1);
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0xB1, 0x00);
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0x30, 0xE1);	  
-		  cxd2878_wr(dev,dev->config->tuner_addr, 0xB0, 0x01);
+		  cxd2878_wr(dev,dev->tuner_addr, 0xB1, 0x00);
+		  cxd2878_wr(dev,dev->tuner_addr, 0x30, 0xE1);	  
+		  cxd2878_wr(dev,dev->tuner_addr, 0xB0, 0x01);
 	  }
 
 	  //x_fine
 	    /* Keep RF_EXT bit */
-      cxd2878_SetRegisterBits(dev,dev->config->tuner_addr, 0x67, 0x00, 0xFE);
+      cxd2878_SetRegisterBits(dev,dev->tuner_addr, 0x67, 0x00, 0xFE);
 	      /* Disable IF signal output (IF_OUT_SEL setting) (0x74) */
-      cxd2878_SetRegisterBits(dev,dev->config->tuner_addr, 0x74, 0x02, 0x03);
+      cxd2878_SetRegisterBits(dev,dev->tuner_addr, 0x74, 0x02, 0x03);
 
 	  u8 cdata1[3]={0x15, 0x00, 0x00};
-	  cxd2878_wrm(dev,dev->config->tuner_addr,0x5E,cdata1,sizeof(cdata1));
+	  cxd2878_wrm(dev,dev->tuner_addr,0x5E,cdata1,sizeof(cdata1));
       /* Standby setting for CPU (0x88) */
-      cxd2878_wr(dev,dev->config->tuner_addr, 0x88, 0x00);
+      cxd2878_wr(dev,dev->tuner_addr, 0x88, 0x00);
     
       /* Standby setting for internal logic block (0x87) */
-      cxd2878_wr(dev,dev->config->tuner_addr, 0x87, 0xC0);
+      cxd2878_wr(dev,dev->tuner_addr, 0x87, 0xC0);
       /* Load capacitance control setting for crystal oscillator (0x80) */
-      cxd2878_wr(dev,dev->config->tuner_addr, 0x80, 0x01);	
+      cxd2878_wr(dev,dev->tuner_addr, 0x80, 0x01);	
 
 	  return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: Tuner ASCOT3 i2c error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: Tuner ASCOT3 i2c error !",KBUILD_MODNAME);
 	return ret;
 }
 static int cxd2878_setstreamoutput(struct cxd2878_dev*dev,int enable)
@@ -916,7 +938,7 @@ static int cxd2878_setstreamoutput(struct cxd2878_dev*dev,int enable)
     }
 		return 0;
 	err:
-		dev_err(&dev->i2c->dev,"%s: cxd2878_setstreamoutput error !",KBUILD_MODNAME);
+		dev_err(&dev->base->i2c->dev,"%s: cxd2878_setstreamoutput error !",KBUILD_MODNAME);
 		return ret; 
 
 }
@@ -1057,7 +1079,7 @@ static int cxd2878_setTSClkModeAndFreq(struct cxd2878_dev *dev)
 
 	 return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set TSClkModeAndFreq error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set TSClkModeAndFreq error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -1168,7 +1190,7 @@ static int cxd2878_setTSDataPinHiZ(struct cxd2878_dev*dev,u8 enable)
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: cxd2878_setTSDataPinHiZ error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: cxd2878_setTSDataPinHiZ error !",KBUILD_MODNAME);
 	return ret;	
 	
 }
@@ -1410,7 +1432,7 @@ static int SLtoAT_BandSetting(struct cxd2878_dev *dev)
 	return 0;
 	
 err:
-	dev_err(&dev->i2c->dev,"%s: SLtoAT_BandSetting error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: SLtoAT_BandSetting error !",KBUILD_MODNAME);
 	return ret;		
 }
 static int SLtoAT(struct cxd2878_dev*dev)
@@ -1456,7 +1478,7 @@ static int SLtoAT(struct cxd2878_dev*dev)
 	return 0;
 	
 err:
-	dev_err(&dev->i2c->dev,"%s: SLtoAT error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: SLtoAT error !",KBUILD_MODNAME);
 	return ret;	
 }
 static int cxd2878_set_dvbt(struct dvb_frontend *fe)
@@ -1509,7 +1531,7 @@ static int cxd2878_set_dvbt(struct dvb_frontend *fe)
 		
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set dvbt error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set dvbt error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -1617,7 +1639,7 @@ static int SLtoAT2_BandSetting(struct cxd2878_dev*dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: SLtoAT2_BandSetting error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: SLtoAT2_BandSetting error !",KBUILD_MODNAME);
 	return ret;		
 }
 static int SLtoAT2(struct cxd2878_dev*dev)
@@ -1768,7 +1790,7 @@ static int SLtoAT2(struct cxd2878_dev*dev)
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: SLtoAT2 error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: SLtoAT2 error !",KBUILD_MODNAME);
 	return ret;		
 }
 static int cxd2878_set_dvbt2(struct dvb_frontend *fe)
@@ -1830,7 +1852,7 @@ static int cxd2878_set_dvbt2(struct dvb_frontend *fe)
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set dvbt2 error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set dvbt2 error !",KBUILD_MODNAME);
 	return ret;	
 }
 
@@ -1908,7 +1930,7 @@ static int SLtoAC_BandSetting(struct cxd2878_dev *dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set SLtoAC_BandSetting error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set SLtoAC_BandSetting error !",KBUILD_MODNAME);
 	return ret;		
 }
 static int SLtoAC(struct cxd2878_dev *dev)
@@ -1954,7 +1976,7 @@ static int SLtoAC(struct cxd2878_dev *dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set SLtoAC error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set SLtoAC error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -2001,7 +2023,7 @@ static int cxd2878_set_dvbc(struct dvb_frontend *fe)
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set dvbc error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set dvbc error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -2097,7 +2119,7 @@ static int SLtoAIT_BandSetting(struct cxd2878_dev *dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: SLtoAIT_BandSetting error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: SLtoAIT_BandSetting error !",KBUILD_MODNAME);
 	return ret;
 }
 static int SLtoAIT(struct cxd2878_dev *dev)
@@ -2162,7 +2184,7 @@ static int SLtoAIT(struct cxd2878_dev *dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: SLtoAIT error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: SLtoAIT error !",KBUILD_MODNAME);
 	return ret;	
 }
 static int cxd2878_set_isdbt(struct dvb_frontend *fe)
@@ -2202,7 +2224,7 @@ static int cxd2878_set_isdbt(struct dvb_frontend *fe)
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set isdbt error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set isdbt error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -2250,7 +2272,7 @@ static int SLtoACC_BandSetting(struct cxd2878_dev *dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s:  SLtoACC_BandSetting error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s:  SLtoACC_BandSetting error !",KBUILD_MODNAME);
 	return ret;	
 }
 static int SLtoACC(struct cxd2878_dev *dev)
@@ -2303,7 +2325,7 @@ static int SLtoACC(struct cxd2878_dev *dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set SLtoACC error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set SLtoACC error !",KBUILD_MODNAME);
 	return ret;	
 }
 static int cxd2878_set_mcns(struct dvb_frontend *fe)
@@ -2354,7 +2376,7 @@ static int cxd2878_set_mcns(struct dvb_frontend *fe)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set mcns error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set mcns error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -2418,7 +2440,7 @@ static int SLtoAA(struct cxd2878_dev *dev)
 	
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: SLtoAA error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: SLtoAA error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -2457,7 +2479,7 @@ static int cxd2878_set_atsc(struct dvb_frontend *fe)
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s: set atsc error !",KBUILD_MODNAME);
+	dev_err(&dev->base->i2c->dev,"%s: set atsc error !",KBUILD_MODNAME);
 	return ret;
 
 }
@@ -2468,6 +2490,9 @@ static int cxd2878_init(struct dvb_frontend *fe)
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	
 	int ret;
+	
+	mutex_lock(&dev->base->i2c_lock);
+
 	if(dev->warm)
 		goto warm_start;
 	//clear all registers
@@ -2481,17 +2506,17 @@ static int cxd2878_init(struct dvb_frontend *fe)
 	//init setting for crystal oscillator
 	 cxd2878_wr(dev,dev->slvx,0x1D,0x00);
 	 /* Clock mode setting */
-	 cxd2878_wr(dev,dev->slvx,0x14,dev->config->xtal);
+	 cxd2878_wr(dev,dev->slvx,0x14,dev->base->config->xtal);
 	 msleep(2);
 	 cxd2878_wr(dev,dev->slvx,0x50,0x00);
 	 
-	 if(dev->config->atscCoreDisable)/* ATSC 1.0 core disable setting */
+	 if(dev->base->config->atscCoreDisable)/* ATSC 1.0 core disable setting */
 	 	 cxd2878_wr(dev,dev->slvx,0x90,0x00);
 	 
 	 msleep(2);
 	 cxd2878_wr(dev,dev->slvx,0x10,0x00); 
 
-	if(dev->config->atscCoreDisable)
+	if(dev->base->config->atscCoreDisable)
 		msleep(1);
 	else
 		msleep(21);
@@ -2515,9 +2540,9 @@ static int cxd2878_init(struct dvb_frontend *fe)
 	cxd2878_i2c_repeater(dev,0);
 
 	//set the ts mode
-    cxd2878_SetBankAndRegisterBits(dev,dev->slvt, 0x00, 0xC4,  (dev->config->ts_mode? 0x00 : 0x80), 0x80);
-    cxd2878_SetBankAndRegisterBits(dev,dev->slvt, 0x02, 0xE4,  ((dev->config->ts_mode == 2) ? 0x01 : 0x00), 0x01);
-    cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0xC4,  (dev->config->ts_ser_data ? 0x08 : 0x00), 0x08);
+    cxd2878_SetBankAndRegisterBits(dev,dev->slvt, 0x00, 0xC4,  (dev->base->config->ts_mode? 0x00 : 0x80), 0x80);
+    cxd2878_SetBankAndRegisterBits(dev,dev->slvt, 0x02, 0xE4,  ((dev->base->config->ts_mode == 2) ? 0x01 : 0x00), 0x01);
+    cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0xC4,  (dev->base->config->ts_ser_data ? 0x08 : 0x00), 0x08);
     cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0xC4, 0x00, 0x10);
 
 
@@ -2532,9 +2557,13 @@ warm_start:
 	c->post_bit_count.len = 1;
 	c->post_bit_count.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
 	
+	mutex_unlock(&dev->base->i2c_lock);
+
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s:Init failed!",KBUILD_MODNAME);
+	mutex_unlock(&dev->base->i2c_lock);
+	dev_err(&dev->base->i2c->dev,"%s:Init failed!",KBUILD_MODNAME);
+
 	return ret;
 }
 
@@ -2551,6 +2580,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe,
 	u16 tmp16 = 0;
 	s32  rflevel,snr=0;
 	
+	mutex_lock(&dev->base->i2c_lock);
 	
 	*status = 0;
 	switch (c->delivery_system){
@@ -2820,11 +2850,12 @@ static int cxd2878_read_status(struct dvb_frontend *fe,
 		c->post_bit_count.len = 1;
 		c->post_bit_error.len = 1;
 
+	mutex_unlock(&dev->base->i2c_lock);
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s:read status failed!",KBUILD_MODNAME);
-
+	mutex_unlock(&dev->base->i2c_lock);
+	dev_err(&dev->base->i2c->dev,"%s:read status failed!",KBUILD_MODNAME);
 	return ret;
 }
 
@@ -2834,12 +2865,14 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
 	int ret = 0;
 
-	dev_dbg(&dev->i2c->dev,
+	dev_dbg(&dev->base->i2c->dev,
 		"delivery_system=%u modulation=%u frequency=%u bandwidth_hz=%u symbol_rate=%u inversion=%u stream_id=%d\n",
 		c->delivery_system, c->modulation, c->frequency,
 		c->bandwidth_hz, c->symbol_rate, c->inversion,
 		c->stream_id);
 	
+		mutex_lock(&dev->base->i2c_lock);
+
 		if(!dev->warm)
 			cxd2878_init(fe);
 		
@@ -2883,23 +2916,37 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 	if(ret)
 		goto err;
 	
+	mutex_unlock(&dev->base->i2c_lock);
+
 	msleep(20);
 
 	return 0;
 err:
-	dev_err(&dev->i2c->dev,"%s:set frontend failed!",KBUILD_MODNAME);
+	mutex_unlock(&dev->base->i2c_lock);
+	dev_err(&dev->base->i2c->dev,"%s:set frontend failed!",KBUILD_MODNAME);
 	return ret; 
 }
 static int cxd2878_tune(struct dvb_frontend*fe,bool re_tune,
 	unsigned int mode_flags,unsigned int *delay,enum fe_status*status)
 {
-	*delay = HZ/5;
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	int ret = 0;
 	if(re_tune){
-		int ret = cxd2878_set_frontend(fe);
+		 ret = cxd2878_set_frontend(fe);
 		if(ret)
 			return ret;
+		dev->tune_time = jiffies;
 	}
-	return cxd2878_read_status(fe,status);
+	*delay = HZ;
+	
+	ret = cxd2878_read_status(fe,status);
+	if(ret)
+		ret;
+	
+	if (*status & FE_HAS_LOCK)
+			return 0;
+	
+	return 0;
 }
 
 static int cxd2878_set_property(struct dvb_frontend*fe,
@@ -2996,8 +3043,8 @@ static void cxd2878_spi_read(struct dvb_frontend *fe, struct ecp3_info *ecp3inf)
 	struct cxd2878_dev *dev = fe->demodulator_priv;
 
 
-	if (dev->config->read_properties)
-		dev->config->read_properties(dev->i2c,ecp3inf->reg, &(ecp3inf->data));
+	if (dev->base->config->read_properties)
+		dev->base->config->read_properties(dev->base->i2c,ecp3inf->reg, &(ecp3inf->data));
 
 	return ;
 }
@@ -3008,9 +3055,20 @@ static void cxd2878_spi_write(struct dvb_frontend *fe,struct ecp3_info *ecp3inf)
 	struct cxd2878_dev *dev = fe->demodulator_priv;
 
 
-	if (dev->config->write_properties)
-		dev->config->write_properties(dev->i2c,ecp3inf->reg, ecp3inf->data);
+	if (dev->base->config->write_properties)
+		dev->base->config->write_properties(dev->base->i2c,ecp3inf->reg, ecp3inf->data);
 	return ;
+}
+
+static void cxd2878_release (struct dvb_frontend*fe)
+{
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	dev->base->count--;
+	if(dev->base->count == 0){
+		list_del(&dev->base->cxdlist);
+		kfree(dev->base);
+		}
+	kfree(dev);
 }
 
 static const struct dvb_frontend_ops cxd2878_ops = {
@@ -3044,6 +3102,7 @@ static const struct dvb_frontend_ops cxd2878_ops = {
 	},
 
 			.init 					= cxd2878_init,
+			.release			= cxd2878_release,
 			.set_frontend			= cxd2878_set_frontend,
 			.tune					= cxd2878_tune,
 			.get_frontend_algo		= cxd2878_get_algo,
@@ -3059,22 +3118,35 @@ static const struct dvb_frontend_ops cxd2878_ops = {
 			.spi_read				= cxd2878_spi_read,
 			.spi_write				= cxd2878_spi_write,
 };
+
+static struct cxd_base *match_base(struct i2c_adapter *i2c,u8 adr)
+{
+	struct cxd_base*p;
+
+	list_for_each_entry(p,&cxdlist,cxdlist)
+	if(p->i2c==i2c &&p->adr!=adr)
+		return p;
+	return NULL;
+}
 struct dvb_frontend*cxd2878_attach(const struct cxd2878_config*config,
 									struct i2c_adapter*i2c)
 {
 	struct cxd2878_dev *dev;
+	struct cxd_base *base;
+
 	int ret;
 	u16 id;
 	u8 data[2];
 	dev = kzalloc(sizeof(struct cxd2878_dev),GFP_KERNEL);
-	if(dev==NULL)
-		goto err;
-	dev->config = config;
-	dev->i2c	= i2c;
+	if(!dev)
+	    goto err;
+	    
 	dev->slvt   = config->addr_slvt;
 	dev->slvx	= config->addr_slvt+2;
 	dev->slvr	= config->addr_slvt-0x20;
 	dev->slvm	= config->addr_slvt-0x54;
+	dev->tuner_addr = config->tuner_addr;
+
 	dev->state	= SONY_DEMOD_STATE_UNKNOWN;
 	dev->system	= SONY_DTV_SYSTEM_UNKNOWN;
 	
@@ -3105,18 +3177,31 @@ struct dvb_frontend*cxd2878_attach(const struct cxd2878_config*config,
 	dev->atscNoSignalThresh = 0x7FFB61;
 	dev->atscSignalThresh = 0x7C4926;
 	dev->warm	 = 0;
+	
+	
 	memcpy(&dev->fe.ops,&cxd2878_ops,sizeof(struct dvb_frontend_ops));
 	dev->fe.demodulator_priv = dev;
-
-	ret = cxd2878_wr(dev,dev->slvx,0x00,0x00);
-	if(ret)
-		goto err1;
-	ret	= cxd2878_rdm(dev,dev->slvx, 0xFB, &data[0], 1);
-	if(ret)
-		goto err1;
-	ret	= cxd2878_rdm(dev,dev->slvx, 0xFD, &data[1], 1);
-	if(ret)
-		goto err1;	
+	
+	base = match_base(i2c,config->addr_slvt);
+	if(base){
+		base->count++;
+		dev->base = base;
+	}else{
+		base = kzalloc(sizeof(struct cxd_base),GFP_KERNEL);
+		if(!base)
+			goto err1;
+		base->i2c =i2c;
+		base->config = config;
+		base->adr =config->addr_slvt;
+		base->count = 1;
+		mutex_init(&base->i2c_lock);
+		dev->base = base;
+		list_add(&base->cxdlist,&cxdlist);
+	}
+	cxd2878_wr(dev,dev->slvx,0x00,0x00);
+	cxd2878_rdm(dev,dev->slvx, 0xFB, &data[0], 1);
+	cxd2878_rdm(dev,dev->slvx, 0xFD, &data[1], 1);
+	
 	id = ((data[0] & 0x03) << 8) | data[1];
 	
 	switch(id){ 
@@ -3135,7 +3220,7 @@ struct dvb_frontend*cxd2878_attach(const struct cxd2878_config*config,
 			dev_info(&i2c->dev,"Detect CXD2879 chip.");
 			break;
 		case SONY_DEMOD_CHIP_ID_CXD6802	: /**< CXD6802(SiP) */
-			dev_info(&i2c->dev,"Detect CXD286802(SiP) chip.");
+			dev_info(&i2c->dev,"Detect CXD2878/CXD6802(SiP) chip.");
 			break;
 		default:
 		case SONY_DEMOD_CHIP_ID_UNKNOWN: /**< Unknown */		
