@@ -3114,6 +3114,28 @@ static void m88rs6060_spi_write(struct dvb_frontend *fe,
 	return;
 }
 
+static void m88rs6060_eeprom_read(struct dvb_frontend *fe, struct eeprom_info *eepinf)
+{
+	struct m88rs6060_dev *dev = fe->demodulator_priv;
+	struct i2c_client *client = dev->demod_client;
+
+	if (dev->read_eeprom)
+		dev->read_eeprom(client->adapter, eepinf->reg,
+				      &(eepinf->data));
+	return ;
+}
+
+static void m88rs6060_eeprom_write(struct dvb_frontend *fe,struct eeprom_info *eepinf)
+{
+	struct m88rs6060_dev *dev = fe->demodulator_priv;
+	struct i2c_client *client = dev->demod_client;
+
+	if (dev->write_eeprom)
+		dev->write_eeprom(client->adapter, eepinf->reg,
+				      eepinf->data);
+	return ;
+}
+
 static const struct dvb_frontend_ops m88rs6060_ops = {
 	.delsys = {SYS_DVBS, SYS_DVBS2},
 	.info = {
@@ -3143,6 +3165,8 @@ static const struct dvb_frontend_ops m88rs6060_ops = {
 	.diseqc_send_master_cmd = m88rs6060_diseqc_send_master_cmd,
 	.spi_read = m88rs6060_spi_read,
 	.spi_write = m88rs6060_spi_write,
+	.eeprom_read = m88rs6060_eeprom_read,
+	.eeprom_write = m88rs6060_eeprom_write,
 
 };
 static int m88rs6060_ready(struct m88rs6060_dev *dev)
@@ -3262,6 +3286,8 @@ static int m88rs6060_probe(struct i2c_client *client,
 	dev->config.repeater_value = cfg->repeater_value;
 	dev->config.read_properties = cfg->read_properties;
 	dev->config.write_properties = cfg->write_properties;
+	dev->config.read_eeprom = cfg->read_eeprom;
+	dev->config.write_eeprom = cfg->write_eeprom;
 	dev->config.envelope_mode = cfg->envelope_mode;
 	dev->demod_client = client;
 	dev->TsClockChecked = false;
@@ -3304,6 +3330,8 @@ static int m88rs6060_probe(struct i2c_client *client,
 	dev->fe_status = 0;
 	dev->write_properties = cfg->write_properties;
 	dev->read_properties = cfg->read_properties;
+	dev->write_eeprom = cfg->write_eeprom;
+	dev->read_eeprom = cfg->read_eeprom;
 
 	dev->fe.demodulator_priv = dev;
 	i2c_set_clientdata(client, dev);
