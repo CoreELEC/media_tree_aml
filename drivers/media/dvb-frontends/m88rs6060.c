@@ -9,6 +9,8 @@
 
 #include "m88rs6060_priv.h"
 
+#define HWTUNE
+
 static u16 mes_log10[] = {
 	0, 3010, 4771, 6021, 6990, 7781, 8451, 9031, 9542, 10000,
 	10414, 10792, 11139, 11461, 11761, 12041, 12304, 12553, 12788, 13010,
@@ -1855,7 +1857,6 @@ static void m88res6060_set_ts_mode(struct m88rs6060_dev *dev)
 		tmp &= ~0x20;
 	}
 	tmp |= 0x1;
-	printk("tmp = 0x%x \n",tmp);
 	regmap_write(dev->regmap, 0x0b, tmp);
 	regmap_read(dev->regmap, 0x0c, &tmp);
 	regmap_write(dev->regmap, 0xf4, 0x01);
@@ -2136,6 +2137,11 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	return ret;
 }
 
+static enum dvbfe_algo m88rs6060_get_algo(struct dvb_frontend *fe)
+{
+	return DVBFE_ALGO_HW;
+}
+
 static int m88rs6060_init(struct dvb_frontend *fe)
 {
 	struct m88rs6060_dev *dev = fe->demodulator_priv;
@@ -2339,8 +2345,10 @@ static int rs6060_select_xm(struct m88rs6060_dev*dev,u32 *xm_KHz)
 
 	return 0;
 }
-static int m88rs6060_set_clock_ratio(struct m88rs6060_dev*dev )
+
+static int m88rs6060_set_clock_ratio(struct m88rs6060_dev *dev )
 {
+	struct i2c_client *client = dev->demod_client;
 	unsigned mod_fac,tmp1,tmp2,val;
 	u32 input_datarate,locked_sym_rate_KSs;
 	u32 Mclk_KHz = 96000,iSerialMclkHz;
@@ -2447,7 +2455,7 @@ static int m88rs6060_set_clock_ratio(struct m88rs6060_dev*dev )
 				divid_ratio = (u16) (Mclk_KHz/input_datarate);
 			else
 				divid_ratio = 0xff;
-			printk("MClk_KHz = %d,divid_ratio = %d \n",Mclk_KHz,divid_ratio);
+			dev_dbg(&client->dev, "MClk_KHz = %d,divid_ratio = %d \n", Mclk_KHz, divid_ratio);
 
 			if(divid_ratio<8)
 				divid_ratio = 8;
@@ -3089,6 +3097,30 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 	return ret;
 }
 
+static int m88rs6060_tune(struct dvb_frontend *fe, bool re_tune,
+		unsigned int mode_flags,
+		unsigned int *delay, enum fe_status *status)
+{
+	//struct mxl *state = fe->demodulator_priv;
+	int r = 0;
+
+	*delay = HZ / 2;
+	if (re_tune) {
+		r = m88rs6060_set_frontend(fe);
+		if (r)
+			return r;
+	}
+
+	r = m88rs6060_read_status(fe, status);
+	if (r)
+		return r;
+
+	if (*status & FE_HAS_LOCK)
+		return 0;
+
+	return 0;
+}
+
 static void m88rs6060_spi_read(struct dvb_frontend *fe,
 			       struct ecp3_info *ecp3inf)
 {
@@ -3153,7 +3185,12 @@ static const struct dvb_frontend_ops m88rs6060_ops = {
 	},
 
 	.init = m88rs6060_init,
+#ifdef HWTUNE
+	.get_frontend_algo = m88rs6060_get_algo,
+	.tune = m88rs6060_tune,
+	#else
 	.set_frontend = m88rs6060_set_frontend,
+#endif
 
 	.read_status = m88rs6060_read_status,
 	.read_ber = m88rs6060_read_ber,
