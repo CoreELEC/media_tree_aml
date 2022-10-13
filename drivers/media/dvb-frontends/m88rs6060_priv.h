@@ -125,7 +125,7 @@ struct MT_FE_CHAN_INFO_DVBS2 {
 //for si5351
 /* Define definitions */
 
-#define SI5351_BUS_BASE_ADDR				0xC0
+#define SI5351_BUS_BASE_ADDR				0x60
 #define SI5351_XTAL_FREQ					27000000
 #define SI5351_PLL_FIXED					900000000
 
