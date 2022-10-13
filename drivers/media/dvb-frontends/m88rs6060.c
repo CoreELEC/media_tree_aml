@@ -304,10 +304,10 @@ static int si5351_write(struct m88rs6060_dev *dev,u8 reg,u8 data)
 	u8 val;
 	int ret;
 	struct i2c_msg msg = {
-		.addr = SI5351_BUS_BASE_ADDR/2,.flags = 0,.buf = buf,.len = 2
+		.addr = SI5351_BUS_BASE_ADDR,.flags = 0,.buf = buf,.len = 2
 	};
 
-	ret = i2c_transfer(dev->tuner_client->adapter, &msg, 1);
+	ret = i2c_transfer(dev->demod_client->adapter, &msg, 1);
 	if (ret != 1) {
 		dev_err(&client->dev,
 			"si5351(ret=%i, reg=0x%02x, value=0x%02x)\n",
@@ -329,7 +329,7 @@ static int si5351_write_bulk(struct m88rs6060_dev *dev,u8 reg, u8 len,u8*data)
 	 memcpy(&buf[1],data,len);
 	 
 	 struct i2c_msg msg = {
-		.addr = SI5351_BUS_BASE_ADDR/2,.flags = 0,.buf = buf,.len = len+1
+		.addr = SI5351_BUS_BASE_ADDR,.flags = 0,.buf = buf,.len = len+1
 		};
 
 	 ret = i2c_transfer(dev->demod_client->adapter, &msg, 1);
@@ -351,7 +351,7 @@ static u8 si5351_read(struct m88rs6060_dev *dev,u8 reg,u8 *data)
 	u8 b0[] = { reg };
 	struct i2c_msg msg[] = {
 		{
-		 .addr = SI5351_BUS_BASE_ADDR/2,
+		 .addr = SI5351_BUS_BASE_ADDR,
 		 .flags = 0,
 		 .buf = b0,
 		 .len = 1},
@@ -1356,15 +1356,19 @@ static void m88rs6060_hard_rest(struct m88rs6060_dev *dev)
 {
 	unsigned val;
 	
-	rs6060_set_reg(dev, 0x4, 0x1);
-	rs6060_set_reg(dev, 0x4, 0x0);
+	rs6060_set_reg(dev, 0x04, 0x01);
+	rs6060_set_reg(dev, 0x04, 0x00);
 
+	regmap_read(dev->regmap, 0x04, &val);
+	val&=~0x01;
+	regmap_write(dev->regmap, 0x04,val);
+	
 	msleep(1);
 	rs6060_wakeup(dev);
 	
 
 	regmap_read(dev->regmap, 0x08, &val);
-	regmap_write(dev->regmap, 0x8, (val | 0x1));
+	regmap_write(dev->regmap, 0x08, (val | 0x01));
 
 	regmap_read(dev->regmap, 0x0b, &val);
 	regmap_write(dev->regmap, 0x0b, (val | 0x1));
@@ -1892,10 +1896,10 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	unsigned tsid[16];
 	bool mis = false;
 
-	//dev_info(&client->dev,
-	//	 "delivery_system=%u modulation=%u frequency=%u bandwidth_hz=%u symbol_rate=%u inversion=%u stream_id=%d\n",
-	//	 c->delivery_system, c->modulation, c->frequency,
-	//	 c->bandwidth_hz, c->symbol_rate, c->inversion, c->stream_id);
+	dev_dbg(&client->dev,
+		 "delivery_system=%u modulation=%u frequency=%u bandwidth_hz=%u symbol_rate=%u inversion=%u stream_id=%d\n",
+		 c->delivery_system, c->modulation, c->frequency,
+		 c->bandwidth_hz, c->symbol_rate, c->inversion, c->stream_id);
 
 	if (!dev->warm) {
 		ret = -EAGAIN;
@@ -1909,12 +1913,10 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	if (ret)
 		goto err;
 
-	regmap_write(dev->regmap, 0x7, 0x80);
-	regmap_write(dev->regmap, 0x7, 0x00);
 	msleep(2);
 	/*clear ts */
 	regmap_write(dev->regmap, 0xf5, 0x00);
-	msleep(2);
+	regmap_read(dev->regmap, 0xfd, &tmp);
 	regmap_read(dev->regmap, 0xb2, &tmp);
 	if (tmp == 0x01) {
 		regmap_write(dev->regmap, 0x00, 0x0);
@@ -1938,6 +1940,7 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	else
 		regmap_write(dev->regmap, 0xa0, 0x44);
 
+	regmap_read(dev->regmap, 0xfd, &tmp);
 	rs6060_set_ts_mclk(dev, target_mclk);
 	regmap_write(dev->regmap, 0x6, 0x0);
 	msleep(10);
@@ -1957,7 +1960,7 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	rs6060_set_reg(dev, 0x00, 0x0);
 
 	regmap_write(dev->regmap, 0xb2, 0x1);
-	regmap_write(dev->regmap, 0x00, 0x0);
+	regmap_write(dev->regmap, 0x00, 0x1);
 
 	for (i = 0; i < (sizeof(rs6060_reg_tbl_def) / 2); i++)
 		ret =
@@ -2030,7 +2033,9 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	s32tmp = (2 * s32tmp + dev->mclk) / (2 * dev->mclk);
 	buf[0] = (s32tmp >> 0) & 0xff;
 	buf[1] = (s32tmp >> 8) & 0xff;
-	ret = regmap_bulk_write(dev->regmap, 0x5e, buf, 2);
+	//ret = regmap_bulk_write(dev->regmap, 0x5e, buf, 2);
+	ret = regmap_write(dev->regmap, 0x5e, buf[0]);
+	ret = regmap_write(dev->regmap, 0x5f, buf[1]);
 	if (ret)
 		goto err;
 
@@ -2128,7 +2133,7 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 	dev->TsClockChecked = true;
 	
 	if(dev->config.HAS_CI)
-			dev->newTP = true;
+		dev->newTP = true;
 	
 	return 0;
 
@@ -2417,13 +2422,14 @@ static int m88rs6060_set_clock_ratio(struct m88rs6060_dev *dev )
 			default:					input_datarate = locked_sym_rate_KSs*mod_fac*2/8/3;		break;
 
 		}
+
 		rs6060_get_ts_mclk(dev,&Mclk_KHz);
 		if(dev->config.ts_mode==MtFeTsOutMode_Serial){
 			u32 target_mclk = Mclk_KHz;
 			input_datarate*=8;
 
-		//	target_mclk = input_datarate;
-				rs6060_select_xm(dev,&target_mclk);
+			target_mclk = input_datarate;
+			rs6060_select_xm(dev,&target_mclk);
 			if(target_mclk != Mclk_KHz){
 				regmap_write(dev->regmap,0x06,0xe0);
 				rs6060_set_ts_mclk(dev,target_mclk);
@@ -2612,6 +2618,7 @@ static int m88rs6060_read_status(struct dvb_frontend *fe,
 
 	if((dev->config.HAS_CI)&&(dev->fe_status & FE_HAS_LOCK)&&(dev->newTP))
 	{
+		printk("test for CI clock.\n");
 		u32 clock = 0;
 		u32 value = 0;
 		int stat = 0;
@@ -2624,10 +2631,12 @@ static int m88rs6060_read_status(struct dvb_frontend *fe,
 			msleep(10);
 		}
 		speed = dev->config.GetSpeed(client->adapter,dev->config.num);
-		clock = ((speed*4)*204*8/1024)+500; //khz
+		clock = ((speed*4)*204*8/1024); //khz
 		if(clock<42000)
 			clock = 42000;
-		value = (clock/8*204/188*25000/6)+500;
+		value = (clock/8*25000/6);
+		
+//		printk("clock = %d,value = %d\n",clock,value);		
 		si5351_set_freq(dev,value,0,SI5351_CLK0);
 		dev->newTP = false;
 	}	
@@ -3382,7 +3391,8 @@ static int m88rs6060_probe(struct i2c_client *client,
 	m88rs6060_ready(dev);
 	if(dev->config.HAS_CI){  //for 6910SECI
 		si5351_init(dev);
-		si5351_set_freq(dev,62500000,0,SI5351_CLK0);
+		si5351_clock_enable(dev,SI5351_CLK0,1);
+		si5351_set_freq(dev,41666666,0,SI5351_CLK0);
 	 }
 	return 0;
 
