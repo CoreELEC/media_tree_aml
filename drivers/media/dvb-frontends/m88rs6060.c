@@ -3081,7 +3081,7 @@ static int m88rs6060_diseqc_send_master_cmd(struct dvb_frontend *fe, struct dvb_
 static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 				       enum fe_sec_mini_cmd fe_sec_mini_cmd)
 {
-		struct i2c_client *client = fe->demodulator_priv;
+	struct i2c_client *client = fe->demodulator_priv;
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	struct i2c_adapter *i2c = dev->base->i2c;
 	int ret;
@@ -3181,7 +3181,85 @@ static int m88rs6060_tune(struct dvb_frontend *fe, bool re_tune,
 
 	return 0;
 }
+static int m88rs6060_get_frontend(struct dvb_frontend *fe, struct dtv_frontend_properties *p)
+{
+	struct i2c_client *client = fe->demodulator_priv;
+	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
+	struct i2c_adapter *i2c = dev->base->i2c;
+	struct MT_FE_CHAN_INFO_DVBS2 p_info;
+	
+	
+	m88rs6060_get_channel_info(dev,&p_info);
+	
+	switch(p_info.mod_mode)
+        {
+            case MtFeModMode_8psk:
+                  p->modulation = PSK_8; break;
+            case MtFeModMode_16Apsk:
+                  p->modulation = APSK_16; break;
+            case MtFeModMode_32Apsk:
+                 p->modulation = APSK_32; break;
+            case MtFeModMode_64Apsk:
+                p->modulation = APSK_64; break;
+            case MtFeModMode_Qpsk:
+            default:   p->modulation = QPSK; break;
+        }
+         switch(p_info.code_rate)
+		{
+			case MtFeCodeRate_1_4:		p->fec_inner = FEC_1_4;     	break;
+			case MtFeCodeRate_1_3:		p->fec_inner = FEC_1_3;	break;
+			case MtFeCodeRate_2_5:		p->fec_inner = FEC_2_5;	break;
+			case MtFeCodeRate_1_2:		p->fec_inner = FEC_1_2;	break;
+			case MtFeCodeRate_3_5:		p->fec_inner = FEC_3_5;	break;
+			case MtFeCodeRate_2_3:		p->fec_inner = FEC_2_3;	break;
+			case MtFeCodeRate_3_4:		p->fec_inner = FEC_3_4;	break;
+			case MtFeCodeRate_4_5:		p->fec_inner = FEC_4_5;	break;
+			case MtFeCodeRate_5_6:		p->fec_inner = FEC_5_6;	break;
+			case MtFeCodeRate_8_9:		p->fec_inner = FEC_8_9;	break;
+			case MtFeCodeRate_9_10:	p->fec_inner = FEC_9_10;	break;
+			case MtFeCodeRate_5_9:		p->fec_inner = FEC_5_9;	break;
+			case MtFeCodeRate_7_9:		p->fec_inner = FEC_7_9;	break;
+			case MtFeCodeRate_4_15:	p->fec_inner = FEC_4_15;	break;
+			case MtFeCodeRate_7_15:	p->fec_inner = FEC_7_15;	break;
+			case MtFeCodeRate_8_15:	p->fec_inner = FEC_8_15;	break;
+			case MtFeCodeRate_11_15:	p->fec_inner = FEC_11_15;	break;
+			case MtFeCodeRate_13_18:	p->fec_inner = FEC_13_18;	break;
+			case MtFeCodeRate_9_20:	p->fec_inner = FEC_9_20;	break;
+			case MtFeCodeRate_11_20:	p->fec_inner = FEC_11_20;	break;
+			case MtFeCodeRate_23_36:	p->fec_inner = FEC_23_36;	break;
+			case MtFeCodeRate_25_36:	p->fec_inner = FEC_25_36;	break;
+			case MtFeCodeRate_11_45:	p->fec_inner = FEC_11_45;	break;
+			case MtFeCodeRate_13_45:	p->fec_inner = FEC_13_45;	break;
+			case MtFeCodeRate_14_45:	p->fec_inner = FEC_14_45;	break;
+			case MtFeCodeRate_26_45:	p->fec_inner = FEC_26_45;	break;
+			case MtFeCodeRate_28_45:	p->fec_inner = FEC_28_45;	break;
+			case MtFeCodeRate_29_45:	p->fec_inner = FEC_29_45;	break;
+			case MtFeCodeRate_31_45:	p->fec_inner = FEC_31_45;	break;
+			case MtFeCodeRate_32_45:	p->fec_inner = FEC_32_45;	break;
+			case MtFeCodeRate_77_90:	p->fec_inner = FEC_77_90;	break;
+			default:			p->fec_inner = FEC_NONE;  	break;
+		}
+		p->pilot = p_info.is_pilot_on ? PILOT_ON : PILOT_OFF;
+		switch(p_info.roll_off){
+		   case MtFeRollOff_0p35:
+		   		p->rolloff = ROLLOFF_35;break;
+		   case MtFeRollOff_0p25:
+		   		p->rolloff = ROLLOFF_25;break;		   		
+		   case MtFeRollOff_0p20:
+		   		p->rolloff = ROLLOFF_20;break;
+		   case MtFeRollOff_0p15:
+		   		p->rolloff = ROLLOFF_15;break;
+		   case MtFeRollOff_0p10:
+		   		p->rolloff = ROLLOFF_10;break;
+		   case MtFeRollOff_0p05:
+		   		p->rolloff = ROLLOFF_5;break;
+		   	default:
+		   		p->rolloff = ROLLOFF_AUTO;break;		   				   				   				
+		}
+		p->inversion = (p_info.is_spectrum_inv -1) ?INVERSION_ON : INVERSION_OFF;
 
+ return 0;
+}
 static void m88rs6060_spi_read(struct dvb_frontend *fe,
 			       struct ecp3_info *ecp3inf)
 {
@@ -3256,7 +3334,7 @@ static const struct dvb_frontend_ops m88rs6060_ops = {
 	#else
 	.set_frontend = m88rs6060_set_frontend,
 #endif
-
+	.get_frontend    = m88rs6060_get_frontend,
 	.read_status = m88rs6060_read_status,
 	.read_ber = m88rs6060_read_ber,
 	.read_signal_strength = m88rs6060_read_signal_strength,
