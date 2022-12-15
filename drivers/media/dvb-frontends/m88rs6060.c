@@ -12,6 +12,23 @@
 #define HWTUNE
 
 static LIST_HEAD(m88rs6060list);
+static LIST_HEAD(si5351list);
+struct si5351_base{
+	struct list_head si5351list;
+	struct i2c_adapter *i2c_si5351;	// i2c
+	struct mutex i2c_mutex_ci;
+
+	u32	count;
+	int clk_port;
+};
+
+//for CI
+struct si5351_priv{
+	struct si5351_base *base1;
+	int clk_port;
+	u32 plla_freq;
+	u32 pllb_freq;
+};
 struct m88rs6060_base{
 	struct list_head m88rs6060list;
 	struct mutex i2c_mutex;
@@ -36,16 +53,14 @@ struct m88rs6060_dev {
 	u32 frequecy;    //khz
 	u64 post_bit_error;
 	u64 post_bit_count;
-	struct m88rs6060_base *base;	
+	struct m88rs6060_base *base;
+	struct si5351_priv *priv;
 	void (*write_properties)(struct i2c_adapter * i2c, u8 reg, u32 buf);
 	void (*read_properties)(struct i2c_adapter * i2c, u8 reg, u32 * buf);
 
 	void (*write_eeprom) (struct i2c_adapter *i2c,u8 reg, u8 buf);
 	void (*read_eeprom) (struct i2c_adapter *i2c,u8 reg, u8 *buf);
 
-	//for si5351
-	u32 plla_freq;
-	u32 pllb_freq;
 	bool newTP;
 	
 };
@@ -335,10 +350,10 @@ static  struct MT_FE_PLS_INFO mPLSInfoTable[] =
 	 {0xFE, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  FALSE,  FALSE,		 0},
 	 {0xFF, 	  FALSE,  MtFeType_DvbS2X,	  MtFeModMode_Undef,	  MtFeCodeRate_Undef,	  TRUE,   FALSE,		 0}
  };
-//for CI
-static int si5351_write(struct m88rs6060_dev *dev,u8 reg,u8 data)
+
+static int si5351_write(struct si5351_priv *priv,u8 reg,u8 data)
 {
-	struct i2c_adapter *i2c = dev->base->i2c;
+	struct i2c_adapter *i2c = priv->base1->i2c_si5351;
 	u8 buf[] = { reg, data };
 	u8 val;
 	int ret;
@@ -356,10 +371,10 @@ static int si5351_write(struct m88rs6060_dev *dev,u8 reg,u8 data)
 	return 0;
 }
 
-static int si5351_write_bulk(struct m88rs6060_dev *dev,u8 reg, u8 len,u8*data)
+static int si5351_write_bulk(struct si5351_priv *priv,u8 reg, u8 len,u8*data)
 
 {
-	struct i2c_adapter *i2c = dev->base->i2c;
+	struct i2c_adapter *i2c = priv->base1->i2c_si5351;
 	u8 buf[80];
 	u8 val;
 	int ret;
@@ -381,10 +396,10 @@ static int si5351_write_bulk(struct m88rs6060_dev *dev,u8 reg, u8 len,u8*data)
 	 return 0;
 }
 
-static u8 si5351_read(struct m88rs6060_dev *dev,u8 reg,u8 *data)
+static u8 si5351_read(struct si5351_priv *priv,u8 reg,u8 *data)
 
 {
-	struct i2c_adapter *i2c = dev->base->i2c;
+	struct i2c_adapter *i2c = priv->base1->i2c_si5351;
 	int ret;
 	unsigned val;
 	u8 b0[] = { reg };
@@ -409,7 +424,7 @@ static u8 si5351_read(struct m88rs6060_dev *dev,u8 reg,u8 *data)
 	}
 
 	dev_dbg(&i2c->dev, "si5351 reg 0x%02x, value 0x%02x\n",
-		dev->config.tuner_adr, reg, *data);
+		 reg, *data);
 
 
 	return 0;
@@ -537,7 +552,7 @@ static u32 pll_calc(u32 freq, struct Si5351RegSet *reg, int correction)
  * target_pll - Which PLL to set
  *     (use the si5351_pll enum)
  */
-void si5351_set_pll(struct m88rs6060_dev *dev,u32 pll_freq, enum si5351_pll target_pll)
+void si5351_set_pll(struct si5351_priv *priv,u32 pll_freq, enum si5351_pll target_pll)
 {
 
 	struct Si5351RegSet pll_reg;
@@ -583,11 +598,11 @@ void si5351_set_pll(struct m88rs6060_dev *dev,u32 pll_freq, enum si5351_pll targ
 	/* Write the parameters */
 	if(target_pll == SI5351_PLLA)
 	{
-		si5351_write_bulk(dev,SI5351_PLLA_PARAMETERS, i + 1, params);
+		si5351_write_bulk(priv,SI5351_PLLA_PARAMETERS, i + 1, params);
 	}
 	else if(target_pll == SI5351_PLLB)
 	{
-		si5351_write_bulk(dev,SI5351_PLLB_PARAMETERS, i + 1, params);
+		si5351_write_bulk(priv,SI5351_PLLB_PARAMETERS, i + 1, params);
 	}
 
 }
@@ -600,12 +615,12 @@ void si5351_set_pll(struct m88rs6060_dev *dev,u32 pll_freq, enum si5351_pll targ
  *   (use the si5351_clock enum)
  * enable - Set to 1 to enable, 0 to disable
  */
-static void si5351_clock_enable(struct m88rs6060_dev *dev,enum si5351_clock clk, u8 enable)
+static void si5351_clock_enable(struct si5351_priv *priv,enum si5351_clock clk, u8 enable)
 {
 
 	u8 reg_val;
 
-	if(si5351_read(dev,SI5351_OUTPUT_ENABLE_CTRL, &reg_val) != 0)
+	if(si5351_read(priv,SI5351_OUTPUT_ENABLE_CTRL, &reg_val) != 0)
 	{
 		return;
 	}
@@ -619,7 +634,7 @@ static void si5351_clock_enable(struct m88rs6060_dev *dev,enum si5351_clock clk,
 		reg_val |= (1<<(u8)clk);
 	}
 
-	si5351_write(dev,SI5351_OUTPUT_ENABLE_CTRL, reg_val);
+	si5351_write(priv,SI5351_OUTPUT_ENABLE_CTRL, reg_val);
 
 }
 
@@ -633,13 +648,13 @@ static void si5351_clock_enable(struct m88rs6060_dev *dev,enum si5351_clock clk,
  * drive - Desired drive level
  *   (use the si5351_drive enum)
  */
-static void si5351_drive_strength(struct m88rs6060_dev *dev, enum si5351_clock clk, enum si5351_drive drive)
+static void si5351_drive_strength(struct si5351_priv *priv, enum si5351_clock clk, enum si5351_drive drive)
 {
 	u8 reg_val;
 
 	const u8 mask = 0x03;
 
-	if(si5351_read(dev,SI5351_CLK0_CTRL + (u8)clk, &reg_val) != 0)
+	if(si5351_read(priv,SI5351_CLK0_CTRL + (u8)clk, &reg_val) != 0)
 	{
 		return;
 	}
@@ -666,7 +681,7 @@ static void si5351_drive_strength(struct m88rs6060_dev *dev, enum si5351_clock c
 		break;
 	}
 
-	si5351_write(dev,SI5351_CLK0_CTRL + (u8)clk, reg_val);
+	si5351_write(priv,SI5351_CLK0_CTRL + (u8)clk, reg_val);
 }
 
 
@@ -800,12 +815,12 @@ static u32 multisynth_recalc(u32 freq, u32 pll_freq, struct Si5351RegSet *reg)
 	return freq;
 }
 
-static void si5351_set_ms_source(struct m88rs6060_dev *dev, enum si5351_clock clk,  enum si5351_pll pll)
+static void si5351_set_ms_source(struct si5351_priv *priv, enum si5351_clock clk,  enum si5351_pll pll)
 {
 	u8 reg_val = 0x0c;
 	u8 reg_val2;
 
-	if(si5351_read(dev,SI5351_CLK0_CTRL + (u8)clk, &reg_val2) != 0)
+	if(si5351_read(priv,SI5351_CLK0_CTRL + (u8)clk, &reg_val2) != 0)
 	{
 		return;
 	}
@@ -818,17 +833,17 @@ static void si5351_set_ms_source(struct m88rs6060_dev *dev, enum si5351_clock cl
 	{
 		reg_val |= SI5351_CLK_PLL_SELECT;
 	}
-	si5351_write(dev,SI5351_CLK0_CTRL + (u8)clk, reg_val);
+	si5351_write(priv,SI5351_CLK0_CTRL + (u8)clk, reg_val);
 
 }
 
-static void si5351_init(struct m88rs6060_dev *dev)
+static void si5351_init(struct si5351_priv *priv)
 {
-	si5351_write(dev,SI5351_CRYSTAL_LOAD, SI5351_CRYSTAL_LOAD_10PF);
+	si5351_write(priv,SI5351_CRYSTAL_LOAD, SI5351_CRYSTAL_LOAD_10PF);
 	return ;
 }
 
-static void si5351_set_freq(struct m88rs6060_dev *dev,u32 freq, u32 pll_freq, enum si5351_clock clk)
+static void si5351_set_freq(struct si5351_priv *priv,u32 freq, u32 pll_freq, enum si5351_clock clk)
 {
 	 struct Si5351RegSet ms_reg;
 	 struct Si5351RegSet pll_reg;
@@ -854,25 +869,25 @@ static void si5351_set_freq(struct m88rs6060_dev *dev,u32 freq, u32 pll_freq, en
 	if(clk == SI5351_CLK0)
 	{
 		target_pll = SI5351_PLLA;
-		dev->plla_freq = pll_freq;
+		priv->plla_freq = pll_freq;
 	}
 	else if(clk == SI5351_CLK1)
 	{
 		target_pll = SI5351_PLLB;
-		dev->pllb_freq = pll_freq;
+		priv->pllb_freq = pll_freq;
 	}
 	else
 	{
 		/* need to account for CLK2 set before CLK1 */
-		if(dev->pllb_freq == 0)
+		if(priv->pllb_freq == 0)
 		{
 			target_pll = SI5351_PLLB;
-			dev->pllb_freq = pll_freq;
+			priv->pllb_freq = pll_freq;
 		}
 		else
 		{
 			target_pll = SI5351_PLLB;
-			pll_freq = dev->pllb_freq;
+			pll_freq = priv->pllb_freq;
 			multisynth_recalc(freq, pll_freq, &ms_reg);
 		}
 	}
@@ -917,11 +932,11 @@ static void si5351_set_freq(struct m88rs6060_dev *dev,u32 freq, u32 pll_freq, en
 		/* Write the parameters */
 		if(target_pll == SI5351_PLLA)
 		{
-			si5351_write_bulk(dev,SI5351_PLLA_PARAMETERS, i + 1, params);
+			si5351_write_bulk(priv,SI5351_PLLA_PARAMETERS, i + 1, params);
 		}
 		else if(target_pll == SI5351_PLLB)
 		{
-			si5351_write_bulk(dev,SI5351_PLLB_PARAMETERS, i + 1, params);
+			si5351_write_bulk(priv,SI5351_PLLB_PARAMETERS, i + 1, params);
 		}
 	}
 	/* Now the multisynth parameters */
@@ -962,36 +977,36 @@ static void si5351_set_freq(struct m88rs6060_dev *dev,u32 freq, u32 pll_freq, en
 	switch(clk)
 	{
 	case SI5351_CLK0:
-		si5351_write_bulk(dev,SI5351_CLK0_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK0_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	case SI5351_CLK1:
-		si5351_write_bulk(dev,SI5351_CLK1_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK1_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	case SI5351_CLK2:
-		si5351_write_bulk(dev,SI5351_CLK2_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK2_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	case SI5351_CLK3:
-		si5351_write_bulk(dev,SI5351_CLK3_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK3_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	case SI5351_CLK4:
-		si5351_write_bulk(dev,SI5351_CLK4_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK4_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	case SI5351_CLK5:
-		si5351_write_bulk(dev,SI5351_CLK5_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK5_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	case SI5351_CLK6:
-		si5351_write_bulk(dev,SI5351_CLK6_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK6_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	case SI5351_CLK7:
-		si5351_write_bulk(dev,SI5351_CLK7_PARAMETERS, i + 1, params);
-		si5351_set_ms_source(dev,clk, target_pll);
+		si5351_write_bulk(priv,SI5351_CLK7_PARAMETERS, i + 1, params);
+		si5351_set_ms_source(priv,clk, target_pll);
 		break;
 	}
 
@@ -2209,7 +2224,7 @@ static int m88rs6060_init(struct dvb_frontend *fe)
 	c->post_bit_count.len = 1;
 	c->post_bit_count.stat[0].scale = FE_SCALE_NOT_AVAILABLE;
 
-	dev_info(&i2c->dev, "%s finished\n", __func__);
+	//dev_info(&i2c->dev, "%s finished\n", __func__);
 
 	return 0;
 
@@ -2664,26 +2679,14 @@ static int m88rs6060_read_status(struct dvb_frontend *fe,
 
 	if((dev->config.HAS_CI)&&(dev->fe_status & FE_HAS_LOCK)&&(dev->newTP))
 	{
-		printk("test for CI clock.\n");
-		u32 clock = 0;
-		u32 value = 0;
-		int stat = 0;
-		u32 speed = 0;
-		msleep(50);
-		dev->config.SetSpeedstatus(i2c,dev->config.num);
-		msleep(50);
-		while(!stat){
-			stat=dev->config.GetSpeedstatus(i2c,dev->config.num);
-			msleep(10);
-		}
-		speed = dev->config.GetSpeed(i2c,dev->config.num);
-		clock = ((speed*4)*204*8/1024)+500; //khz
-		if(clock<42000)
-			clock = 42000;
+		mutex_lock(&dev->priv->base1->i2c_mutex_ci);
+		u32 value;
+		u32 clock;
+		clock = dev->config.SetCIClock(i2c,dev->config.num);
 		value = (clock/8*204/188*25000/6)+500;
-		
-//		printk("clock = %d,value = %d\n",clock,value);		
-		si5351_set_freq(dev,value,0,SI5351_CLK0);
+	//	printk("clk port = %d,clock = %d,value=%d\n",dev->priv->clk_port,clock,value);
+		si5351_set_freq(dev->priv,value,0,dev->priv->clk_port);
+		mutex_unlock(&dev->priv->base1->i2c_mutex_ci);
 		dev->newTP = false;
 	}	
 	/*power of rf signal */
@@ -3447,6 +3450,16 @@ static struct m88rs6060_base*match_base(struct i2c_adapter*i2c,u8 adr)
 			return p;
 	return NULL;
 }
+static struct si5351_base*match_si5351_base(struct i2c_adapter*i2c,int clk_port)
+{
+	struct si5351_base*p;
+	
+	list_for_each_entry(p,&si5351list,si5351list)
+		if((p->i2c_si5351!= i2c)&&(p->clk_port!=clk_port))// for 6910v12 just a si5351 control two CI
+			return p;
+	return NULL;
+
+}
 static int m88rs6060_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
@@ -3482,17 +3495,13 @@ static int m88rs6060_probe(struct i2c_client *client,
 	dev->config.envelope_mode = cfg->envelope_mode;
 	dev->config.disable_22k   = cfg->disable_22k;
 	dev->TsClockChecked = false;
-	//for ci clk si5351
-	dev->config.GetSpeed = cfg->GetSpeed;
-	dev->config.SetSpeedstatus = cfg->SetSpeedstatus;
-	dev->config.GetSpeedstatus = cfg->GetSpeedstatus;
+	dev->config.SetCIClock= cfg->SetCIClock;
 	dev->config.SetTimes= cfg->SetTimes;
 	dev->config.HAS_CI = cfg->HAS_CI;
 	dev->config.num = cfg->num;
-	dev->plla_freq = 0;
-	dev->pllb_freq = 0;
 	dev->newTP = 0;
 	
+
 	//for i2c
 	base = match_base(client->adapter,client->addr);
 	if(base){
@@ -3533,6 +3542,47 @@ static int m88rs6060_probe(struct i2c_client *client,
 	dev->read_properties = cfg->read_properties;
 	dev->write_eeprom = cfg->write_eeprom;
 	dev->read_eeprom = cfg->read_eeprom;
+	
+	if(dev->config.HAS_CI){  //for 6910SECI
+		//for ci clk si5351
+		struct si5351_priv *priv;
+		struct si5351_base *base1;
+
+		priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+		if (!priv) {
+			ret = -ENOMEM;
+		}
+		base1 = match_si5351_base(client->adapter,cfg->clk_port);
+		if(base1){
+			base1->count++;
+			priv->base1 = base1;
+			
+		}else{
+		
+		base1 = kzalloc(sizeof(struct si5351_base),GFP_KERNEL);
+		if(!base1)
+			goto err_regmap_exit;
+		base1->i2c_si5351= client->adapter;
+		base1->count = 1;
+		base1->clk_port = cfg->clk_port;
+		mutex_init(&base1->i2c_mutex_ci);
+		list_add(&base1->si5351list,&si5351list);
+		priv->base1 = base1;
+	}
+		priv->clk_port = cfg->clk_port;
+		priv->plla_freq = 0;
+		priv->pllb_freq = 0;
+		dev->priv = priv;
+		
+		if(cfg->clk_port==0){
+			si5351_init(priv);
+			si5351_clock_enable(priv,SI5351_CLK0,1);
+			si5351_clock_enable(priv,SI5351_CLK1,1);
+			si5351_set_freq(priv,41666666,0,SI5351_CLK0);	
+			si5351_set_freq(priv,41666666,0,SI5351_CLK1);
+		}
+		
+	 }
 
 	dev->fe.demodulator_priv = client;
 	i2c_set_clientdata(client, dev);
@@ -3542,12 +3592,7 @@ static int m88rs6060_probe(struct i2c_client *client,
 
 	dev_dbg(&client->dev, "found the chip of %s.", m88rs6060_ops.info.name);
 	//ready chip
-	m88rs6060_ready(dev);	
-	if(dev->config.HAS_CI){  //for 6910SECI
-		si5351_init(dev);
-		si5351_clock_enable(dev,SI5351_CLK0,1);
-		si5351_set_freq(dev,41666666,0,SI5351_CLK0);
-	 }
+	m88rs6060_ready(dev);
 	 
 	return 0;
 
@@ -3571,10 +3616,16 @@ static int m88rs6060_remove(struct i2c_client *client)
 
 	dev->base->count --;
 	if(dev->base->count==0)
-	{
-	
+	{	
 	list_del(&dev->base->m88rs6060list);
 	kfree(dev->base);	 
+	}
+	if(dev->priv){
+		dev->priv->base1->count --;
+		if(dev->priv->base1->count==0){
+			list_del(&dev->priv->base1->si5351list);
+			kfree(dev->priv);	 
+			}
 	}
 	regmap_exit(dev->regmap);
 	dev->fe.ops.release = NULL;
