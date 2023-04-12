@@ -55,11 +55,6 @@ struct m88rs6060_dev {
 	u64 post_bit_count;
 	struct m88rs6060_base *base;
 	struct si5351_priv *priv;
-	void (*write_properties)(struct i2c_adapter * i2c, u8 reg, u32 buf);
-	void (*read_properties)(struct i2c_adapter * i2c, u8 reg, u32 * buf);
-
-	void (*write_eeprom) (struct i2c_adapter *i2c,u8 reg, u8 buf);
-	void (*read_eeprom) (struct i2c_adapter *i2c,u8 reg, u8 *buf);
 
 	bool newTP;
 	
@@ -1961,6 +1956,9 @@ static int m88rs6060_set_frontend(struct dvb_frontend *fe)
 		goto err;
 	}
 
+	if(dev->config.RF_switch)
+		dev->config.RF_switch(i2c,dev->config.num,1);  //
+		
 	mutex_lock(&dev->base->i2c_mutex);
 	
 	symbol_rate_KSs = c->symbol_rate / 1000;
@@ -3270,8 +3268,8 @@ static void m88rs6060_spi_read(struct dvb_frontend *fe,
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	struct i2c_adapter *i2c = dev->base->i2c;
 
-	if (dev->read_properties)
-		dev->read_properties(i2c, ecp3inf->reg,
+	if (dev->config.read_properties)
+		dev->config.read_properties(i2c, ecp3inf->reg,
 				     &(ecp3inf->data));
 
 	return;
@@ -3284,8 +3282,8 @@ static void m88rs6060_spi_write(struct dvb_frontend *fe,
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	struct i2c_adapter *i2c = dev->base->i2c;
 
-	if (dev->write_properties)
-		dev->write_properties(i2c, ecp3inf->reg,
+	if (dev->config.write_properties)
+		dev->config.write_properties(i2c, ecp3inf->reg,
 				      ecp3inf->data);
 	return;
 }
@@ -3296,8 +3294,8 @@ static void m88rs6060_eeprom_read(struct dvb_frontend *fe, struct eeprom_info *e
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	struct i2c_adapter *i2c = dev->base->i2c;
 
-	if (dev->read_eeprom)
-		dev->read_eeprom(i2c, eepinf->reg,
+	if (dev->config.read_eeprom)
+		dev->config.read_eeprom(i2c, eepinf->reg,
 				      &(eepinf->data));
 	return ;
 }
@@ -3308,8 +3306,8 @@ static void m88rs6060_eeprom_write(struct dvb_frontend *fe,struct eeprom_info *e
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	struct i2c_adapter *i2c = dev->base->i2c;
 
-	if (dev->write_eeprom)
-		dev->write_eeprom(i2c, eepinf->reg,
+	if (dev->config.write_eeprom)
+		dev->config.write_eeprom(i2c, eepinf->reg,
 				      eepinf->data);
 	return ;
 }
@@ -3492,6 +3490,7 @@ static int m88rs6060_probe(struct i2c_client *client,
 	dev->config.write_properties = cfg->write_properties;
 	dev->config.read_eeprom = cfg->read_eeprom;
 	dev->config.write_eeprom = cfg->write_eeprom;
+	dev->config.RF_switch	= cfg->RF_switch;
 	dev->config.envelope_mode = cfg->envelope_mode;
 	dev->config.disable_22k   = cfg->disable_22k;
 	dev->TsClockChecked = false;
@@ -3538,10 +3537,7 @@ static int m88rs6060_probe(struct i2c_client *client,
 	memcpy(&dev->fe.ops, &m88rs6060_ops, sizeof(struct dvb_frontend_ops));
 	*cfg->fe = &dev->fe;
 	dev->fe_status = 0;
-	dev->write_properties = cfg->write_properties;
-	dev->read_properties = cfg->read_properties;
-	dev->write_eeprom = cfg->write_eeprom;
-	dev->read_eeprom = cfg->read_eeprom;
+
 	
 	if(dev->config.HAS_CI){  //for 6910SECI
 		//for ci clk si5351
