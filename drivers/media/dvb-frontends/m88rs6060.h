@@ -118,6 +118,7 @@ struct m88rs6060_cfg {
 	 * for parallel or CI mode ,swap the order of D0 ~D7
 	 */
 	bool ts_pinswitch;
+	bool ts_autoclock;
 	u32 clk;
 	u16 i2c_wr_max;
 	u8 envelope_mode;	//for diseqc   default 0
