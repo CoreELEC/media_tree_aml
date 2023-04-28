@@ -3451,8 +3451,7 @@ static struct si5351_base*match_si5351_base(struct i2c_adapter*i2c,int clk_port)
 	return NULL;
 
 }
-static int m88rs6060_probe(struct i2c_client *client,
-			   const struct i2c_device_id *id)
+static int m88rs6060_probe(struct i2c_client *client)
 {
 	struct m88rs6060_cfg *cfg = client->dev.platform_data;
 	struct m88rs6060_dev *dev;
@@ -3633,7 +3632,7 @@ static struct i2c_driver m88rs6060_driver = {
 	.driver = {
 		   .name = "m88rs6060",
 		   },
-	.probe = m88rs6060_probe,
+	.probe_new = m88rs6060_probe,
 	.remove = m88rs6060_remove,
 	.id_table = m88rs6060_id_table,
 };
