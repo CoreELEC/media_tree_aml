@@ -3459,7 +3459,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe,
 		c->cnr.stat[0].uvalue = snr-1500;
 		c->cnr.stat[1].scale = FE_SCALE_RELATIVE;
 		c->cnr.stat[1].uvalue = (30-((snr-1500)/1000))*10;
-		c->cnr.stat[1].uvalue = min(max((snr-1500)/1000*24/10,0),100);
+		c->cnr.stat[1].uvalue = min(max((snr-1500)/1000*24/10,0),100)*656;
 		if(c->cnr.stat[1].uvalue>0xffff)
 			c->cnr.stat[1].uvalue = 0xffff;
 
@@ -3728,7 +3728,7 @@ static int cxd2878_read_signal_strength(struct dvb_frontend*fe,
 	*strength = 0;
 	for (i=0; i < p->strength.len; i++)
 		if (p->strength.stat[i].scale == FE_SCALE_RELATIVE)
-			*strength = (u16)p->strength.stat[i].uvalue*656;
+			*strength = (u16)p->strength.stat[i].uvalue;
 	
 	return 0;
 }
@@ -3741,7 +3741,7 @@ static int cxd2878_read_snr(struct dvb_frontend *fe,
 	*snr = 0;
 	for (i=0; i < p->cnr.len; i++)
 		if (p->cnr.stat[i].scale == FE_SCALE_RELATIVE)
-		  *snr = (u16)p->cnr.stat[i].uvalue*655;
+		  *snr = (u16)p->cnr.stat[i].uvalue;
 
 	return 0;
 }
