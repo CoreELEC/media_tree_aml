@@ -3211,7 +3211,7 @@ static int cxd2878_init(struct dvb_frontend *fe)
 	
 	if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
 		ascot3_init(dev); //tuner=cxd2878a
-	else if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)
+	else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
 		freia_init(dev); // tuner =cxd6866
 		
 	cxd2878_i2c_repeater(dev,0);
@@ -3229,7 +3229,15 @@ static int cxd2878_init(struct dvb_frontend *fe)
      cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0xC6, dev->base->config->ts_clk_mask, 0x1F); 
      cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x60, 0x52, dev->base->config->ts_clk_mask, 0x1F);
     }
-
+	
+    //configure the driving current for the TS pin 0 :2mA/1:4mA/2:8mA/3:10mA
+     cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0x95, 1, 0x03); //ts clk 4mA
+     //ts sync/valid/data pins : 4mA	
+     cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0x95, 0x14, 0x3c); 
+     cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0x96, 0x54, 0xff);    
+     cxd2878_SetBankAndRegisterBits(dev,dev->slvt,0x00, 0x97, 0x54, 0xff);   
+     
+       
     if(dev->base->config->lock_flag)//for usb device led light
     {
     	cxd2878_lock_flag(dev,0);//unlocked 
@@ -3375,7 +3383,7 @@ static int cxd2878_read_status(struct dvb_frontend *fe,
 	ret |= cxd2878_i2c_repeater(dev,1);
 	if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
 		ret |= ascot3_read_rssi(dev,c->frequency/1000,&rflevel); //unit khz
-	else if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)
+	else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
 		ret |= freia_read_rssi(dev,c->frequency/1000,&rflevel);		
 	ret |= cxd2878_i2c_repeater(dev,0);
 	
@@ -3614,7 +3622,7 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 	ret |= cxd2878_i2c_repeater(dev,1);
 	if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
 		ret |= ascot3_tune(dev,c->frequency/1000); //unit khz
-	else if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)
+	else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
 		ret |= freia_tune(dev,c->frequency/1000); //unit khz
 		
 	ret |= cxd2878_i2c_repeater(dev,0);
@@ -3949,7 +3957,10 @@ struct dvb_frontend*cxd2878_attach(const struct cxd2878_config*config,
 			break;
 		case SONY_DEMOD_CHIP_ID_CXD6822:
 			dev_info(&i2c->dev,"Detect CXD2878/CXD6822(SiP2) chip.");
-			break;		
+			break;
+		case SONY_DEMOD_CHIP_ID_CXD2878A:
+			dev_info(&i2c->dev,"Detect cxd2878A/cxd6821(SiP2) chip.");
+			break;					
 		default:
 		case SONY_DEMOD_CHIP_ID_UNKNOWN: /**< Unknown */		
 			dev_err(&i2c->dev,"%s:Can not decete the chip.\n",KBUILD_MODNAME);
@@ -3974,7 +3985,7 @@ err:
 EXPORT_SYMBOL_GPL(cxd2878_attach);
 
 MODULE_AUTHOR("Davin zhang<Davin@tbsdtv.com>");
-MODULE_DESCRIPTION("sony cxd2878 family demodulator driver");
+MODULE_DESCRIPTION("sony cxd2878 family Demodulator+Tuner driver");
 MODULE_LICENSE("GPL");
 
 
