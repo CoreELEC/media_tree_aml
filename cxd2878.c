@@ -3963,7 +3963,7 @@ struct dvb_frontend*cxd2878_attach(const struct cxd2878_config*config,
 			break;					
 		default:
 		case SONY_DEMOD_CHIP_ID_UNKNOWN: /**< Unknown */		
-			dev_err(&i2c->dev,"%s:Can not decete the chip.\n",KBUILD_MODNAME);
+			dev_err(&i2c->dev,"%s:Can not detect the chip.\n",KBUILD_MODNAME);
 			goto err1;
 			break;
 	}
