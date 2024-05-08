@@ -1528,7 +1528,7 @@ static int avl6862_read_ber(struct dvb_frontend *fe, u32 *ber)
 	return ret;
 }
 
-static int avl6862fe_algo(struct dvb_frontend *fe)
+static enum dvbfe_algo avl6862fe_algo(struct dvb_frontend *fe)
 {
 	return DVBFE_ALGO_HW;
 }

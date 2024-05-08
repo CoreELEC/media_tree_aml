@@ -300,9 +300,9 @@ static int tsfile_clkdiv = 4;
 #define asyncfifo_get_dev(afifo) ((afifo)->dvb->dev)
 
 /*Section buffer watchdog*/
-static void section_buffer_watchdog_func(unsigned long arg)
+static void section_buffer_watchdog_func(struct timer_list *t)
 {
-	struct aml_dvb *dvb = (struct aml_dvb *)arg;
+	struct aml_dvb *dvb = from_timer(dvb, t, watchdog_timer);
 	struct aml_dmx *dmx;
 	u32 section_busy32 = 0, om_cmd_status32 = 0,
 	    demux_channel_activity32 = 0;
@@ -1720,12 +1720,8 @@ static int dmx_init(struct aml_dmx *dmx)
 
 	/*Reset the hardware */
 	if (!dvb->dmx_init) {
-		init_timer(&dvb->watchdog_timer);
-		dvb->watchdog_timer.function = section_buffer_watchdog_func;
-		dvb->watchdog_timer.expires =
-		    jiffies + msecs_to_jiffies(WATCHDOG_TIMER);
-		dvb->watchdog_timer.data = (unsigned long)dvb;
-		add_timer(&dvb->watchdog_timer);
+    timer_setup(&dvb->watchdog_timer, section_buffer_watchdog_func, 0);
+    mod_timer(&dvb->watchdog_timer, jiffies + msecs_to_jiffies(WATCHDOG_TIMER));
 		dmx_reset_hw(dvb);
 	}
 
