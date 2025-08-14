@@ -28,6 +28,8 @@ struct cxd_base{
 	u32 count	;		//
 	struct cxd2878_config *config;	
 
+	/* Copy of the config provided to the cxd2878_attach */
+	struct cxd2878_config _cfg;
 };
 
 struct cxd2878_dev{
@@ -448,6 +450,15 @@ static int cxd2878_i2c_repeater(struct cxd2878_dev *dev,bool enable)
 err:
 	dev_err(&dev->base->i2c->dev,"%s : %sable thee repeater failed! \n",KBUILD_MODNAME,enable?"en":"dis");
 	return ret;
+}
+static int cxd2878_i2c_gate_ctrl(struct dvb_frontend *fe, int enable)
+{
+	struct cxd2878_dev *dev = fe->demodulator_priv;
+	if (!dev->warm) {
+		cxd2878_SetBankAndRegisterBits(dev,dev->slvx,0x00,0x1A,0x01,0xFF);
+		msleep(2);
+	}
+	return cxd2878_i2c_repeater(dev, enable);
 }
 
 static int ascot3_read_rssi(struct cxd2878_dev*dev,u32 frequency,s32 *rssi)
@@ -3222,15 +3233,17 @@ static int cxd2878_init(struct dvb_frontend *fe)
 	cxd2878_SetBankAndRegisterBits(dev,dev->slvx,0x00,0x1A,0x01,0xFF);
 	msleep(2);
 
+	if (dev->tuner_addr) {
 	//init internal tuner
-	cxd2878_i2c_repeater(dev,1);
+		cxd2878_i2c_repeater(dev,1);
 	
-	if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
-		ascot3_init(dev); //tuner=cxd2878a
-	else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
-		freia_init(dev); // tuner =cxd6866
+		if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
+			ascot3_init(dev); //tuner=cxd2878a
+		else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
+			freia_init(dev); // tuner =cxd6866
 		
-	cxd2878_i2c_repeater(dev,0);
+		cxd2878_i2c_repeater(dev,0);
+	}
 
 
 	//set the ts mode
@@ -3390,17 +3403,26 @@ static int cxd2878_read_status(struct dvb_frontend *fe,
   	    	cxd2878_lock_flag(dev,0);//unlocked 
 	  }
 
-	/*rf signal*/	
-	ret |= cxd2878_i2c_repeater(dev,1);
-	if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
-		ret |= ascot3_read_rssi(dev,c->frequency/1000,&rflevel); //unit khz
-	else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
-		ret |= freia_read_rssi(dev,c->frequency/1000,&rflevel);		
-	ret |= cxd2878_i2c_repeater(dev,0);
-	
-	rflevel-=ifout;
-	rflevel+=256;
-	rflevel_dBm =rflevel/100;
+	if (dev->tuner_addr) {
+		/*rf signal*/	
+		ret |= cxd2878_i2c_repeater(dev,1);
+		if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
+			ret |= ascot3_read_rssi(dev,c->frequency/1000,&rflevel); //unit khz
+		else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
+			ret |= freia_read_rssi(dev,c->frequency/1000,&rflevel);		
+		ret |= cxd2878_i2c_repeater(dev,0);
+		
+		rflevel-=ifout;
+		rflevel+=256;
+		rflevel_dBm =rflevel/100;
+	}
+
+	if (fe->ops.tuner_ops.get_rf_strength) {
+		ret |= fe->ops.tuner_ops.get_rf_strength(fe, &tmp16);
+		rflevel = (s16)tmp16 * 100;
+		rflevel_dBm =rflevel/100;
+	}
+
 	c->strength.len = 2;
 	c->strength.stat[0].scale = FE_SCALE_DECIBEL;
 	c->strength.stat[0].svalue = rflevel*10;
@@ -3742,14 +3764,20 @@ static int cxd2878_set_frontend(struct dvb_frontend *fe)
 			goto err;
 		}
 
-		// set tuner
-	ret |= cxd2878_i2c_repeater(dev,1);
-	if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
-		ret |= ascot3_tune(dev,c->frequency/1000); //unit khz
-	else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
-		ret |= freia_tune(dev,c->frequency/1000); //unit khz
-		
-	ret |= cxd2878_i2c_repeater(dev,0);
+	if (dev->tuner_addr) {
+			// set tuner
+		ret |= cxd2878_i2c_repeater(dev,1);
+		if(dev->chipid == SONY_DEMOD_CHIP_ID_CXD6802)
+			ret |= ascot3_tune(dev,c->frequency/1000); //unit khz
+		else if((dev->chipid == SONY_DEMOD_CHIP_ID_CXD6822)||(dev->chipid == SONY_DEMOD_CHIP_ID_CXD2878A))
+			ret |= freia_tune(dev,c->frequency/1000); //unit khz
+			
+		ret |= cxd2878_i2c_repeater(dev,0);
+	}
+
+	if (fe->ops.tuner_ops.set_params)
+		ret |= fe->ops.tuner_ops.set_params(fe);
+
 	if(c->delivery_system!=SYS_ATSC)
 		ret |= cxd2878_tuneEnd(dev);
 	else
@@ -3797,12 +3825,12 @@ static int cxd2878_tune(struct dvb_frontend*fe,bool re_tune,
 }
 
 static int cxd2878_set_property(struct dvb_frontend*fe,
-		u32 cmd,u32 data)
+		struct dtv_property *tvp)
 {
 	int ret = 0;
-	switch(cmd){
+	switch(tvp->cmd){
 		case DTV_DELIVERY_SYSTEM:
-			switch (data){
+			switch (tvp->u.data){
 				default:
 				case SYS_DVBT:
 				case SYS_DVBT2:
@@ -3967,6 +3995,7 @@ static const struct dvb_frontend_ops cxd2878_ops = {
 
 			.init 					= cxd2878_init,
 			.release			= cxd2878_release,
+			.i2c_gate_ctrl			= cxd2878_i2c_gate_ctrl,
 			.set_frontend			= cxd2878_set_frontend,
 			.tune					= cxd2878_tune,
 			.get_frontend_algo		= cxd2878_get_algo,
@@ -4056,7 +4085,8 @@ struct dvb_frontend*cxd2878_attach(const struct cxd2878_config*config,
 		if(!base)
 			goto err1;
 		base->i2c =i2c;
-		base->config = config;
+		memcpy(&base->_cfg, config, sizeof(base->_cfg));
+		base->config = &base->_cfg;
 		base->adr =config->addr_slvt;
 		base->count = 1;
 		mutex_init(&base->i2c_lock);
@@ -4069,12 +4099,20 @@ struct dvb_frontend*cxd2878_attach(const struct cxd2878_config*config,
 	
 	id = ((data[0] & 0x03) << 8) | data[1];
 	
-	switch(id){ 		
+	switch(id){ 
+		
+		case SONY_DEMOD_CHIP_ID_CXD2856 :  /**< CXD2856 / CXD6800(SiP) */
+			dev_info(&i2c->dev,"Detect CXD2856/CXD6800(SiP) chip.");
+			break;
+		
 		case SONY_DEMOD_CHIP_ID_CXD2857 :  /**< CXD2857 */
 			dev_info(&i2c->dev,"Detect CXD2857 chip.");
 			break;
 		case SONY_DEMOD_CHIP_ID_CXD2878 :  /**< CXD2878 / CXD6801(SiP) */
 			dev_info(&i2c->dev,"Detect CXD2878/CXD6801(SiP) chip.");
+			break;
+		case SONY_DEMOD_CHIP_ID_CXD2879 :  /**< CXD2879 */
+			dev_info(&i2c->dev,"Detect CXD2879 chip.");
 			break;
 		case SONY_DEMOD_CHIP_ID_CXD6802	: /**< CXD6802(SiP) */
 			dev_info(&i2c->dev,"Detect CXD2878/CXD6802(SiP) chip.");
