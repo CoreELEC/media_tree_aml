@@ -18,6 +18,7 @@
 #include "mxl608.h"
 #include "avl6211.h"
 #include "mn88436.h"
+#include "cxd2878.h"
 #include "tuner_ftm4862.h"
 #include "c_stb_regs_define.h"
 #include <linux/amlogic/cpu_version.h>
@@ -59,6 +60,21 @@ static struct cxd2841er_config cxd2841cfg = {
 		.clock_polarity = 1,
 		.mxl603	= 0,
 		.xtal = SONY_XTAL_20500,
+};
+static struct cxd2878_config cxd2878cfg = {
+		.addr_slvt = 0x6c,
+		.xtal = SONY_DEMOD_XTAL_24000KHz,
+		.tuner_addr = 0x60,
+		.tuner_xtal = SONY_ASCOT3_XTAL_24000KHz,
+		.ts_mode = 1,
+		.ts_ser_data = 0,
+		.ts_clk = 1,
+		.ts_clk_mask = 1,
+		.ts_valid = 0,
+		.atscCoreDisable = 0,
+		.lock_flag = 1,
+		.write_properties = NULL,
+		.read_properties = NULL,
 };
 struct ascot3_config ascot3cfg = {
 		.i2c_address = 0x60,
@@ -395,6 +411,25 @@ static int fe_dvb_probe(struct platform_device *pdev)
 						continue;
 					}
 					dev_info(&pdev->dev, "Failed to find Sony CXD2841ER demod!\n");
+
+					reset_demod(i);
+					dev_info(&pdev->dev, "Checking for Sony CXD2878 DVB-C/T/T2 demod ...\n");
+					cxd2878cfg.ts_mode = meson_dvb.ts[i].mode  == AM_TS_SERIAL ? 0 : 1;
+					meson_dvb.fe[i] = cxd2878_attach(&cxd2878cfg, meson_dvb.i2c[i]);
+					if (meson_dvb.fe[i] != NULL) {
+						// GTMEDIA GTT-2 box uses 16MHz xtal for mxl603
+						mxl603cfg.xtal_freq_hz = MXL603_XTAL_16MHz;
+						if (mxl603_attach(meson_dvb.fe[i], meson_dvb.i2c[i], 0x63, &mxl603cfg) == NULL) {
+							dev_info(&pdev->dev, "Failed to find MxL603 tuner!\n");
+							dev_info(&pdev->dev, "Detaching Sony CXD2878 DVB-C/T/T2 frontend!\n");
+							dvb_frontend_detach(meson_dvb.fe[i]);
+							continue;
+						}
+						meson_dvb.total_nims++;
+						continue;
+					}
+					dev_info(&pdev->dev, "Failed to find Sony CXD2878ER demod!\n");
+
 					continue;
 				}
 				dev_info(&pdev->dev, "Checking for Availink AVL6762 DVB-T2/C demod ...\n");

@@ -1030,7 +1030,7 @@ static int mxl603_get_chip_id(struct mxl603_state *state)
 	if (ret)
 		goto err;
 
-	if (id != 0x02) {
+	if (id != 0x01 && id != 0x02) {
 		ret = -ENODEV;
 		goto err;
 	}
