@@ -43,12 +43,12 @@ static struct r912_config r912cfg = {
 };
 static struct avl6862_config avl6862cfg = {
 	.demod_address = 0x14,
-	.tuner_address = 0x7A,
+	.dual_tuner = 1,
 	.ts_serial = 0,
 };
 static struct avl6862_config avl6762cfg = {
 	.demod_address = 0x14,
-	.tuner_address = 0,
+	.dual_tuner = 0,
 	.ts_serial = 0,
 };
 static struct cxd2841er_config cxd2841cfg = {

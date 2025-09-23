@@ -24,6 +24,16 @@
 
 #define MAX_CHANNEL_INFO 256
 
+struct avl6862_config {
+	int		i2c_id;        // i2c adapter id
+	void		*i2c_adapter;  // i2c adapter
+	u8		demod_address; // demodulator i2c address
+	u8		dual_tuner; // 0: single tuner, 1: dual tuner
+	unsigned char 	eDiseqcStatus;
+	int             ts_serial;
+	int		gpio_lock_led;
+};
+
 struct avl6862_priv {
 	struct i2c_adapter *i2c;
  	struct avl6862_config *config;
@@ -32,16 +42,9 @@ struct avl6862_priv {
 
 	/* DVB-Tx */
 	u16 g_nChannel_ts_total;
-};
 
-struct avl6862_config {
-	int		i2c_id;        // i2c adapter id
-	void		*i2c_adapter;  // i2c adapter
-	u8		demod_address; // demodulator i2c address
-	u8		tuner_address; // tuner i2c address
-	unsigned char 	eDiseqcStatus;
-	int             ts_serial;
-	int		gpio_lock_led;
+	/* Copy of the config provided to the mxl603_attach */
+	struct avl6862_config _cfg;
 };
 
 extern struct dvb_frontend *avl6862_attach(struct avl6862_config *config, struct i2c_adapter *i2c);

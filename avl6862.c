@@ -1806,13 +1806,14 @@ struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 	if (priv == NULL)
 		goto err;
 
-        if (config->tuner_address)
+        if (config->dual_tuner)
 		memcpy(&priv->frontend.ops, &avl6862_ops, sizeof(struct dvb_frontend_ops));
         else
 		memcpy(&priv->frontend.ops, &avl6762_ops, sizeof(struct dvb_frontend_ops));
 
 	priv->frontend.demodulator_priv = priv;
-	priv->config = config;
+	memcpy(&priv->_cfg, config, sizeof(priv->_cfg));
+	priv->config = &priv->_cfg;
 	priv->i2c = i2c;
 	priv->g_nChannel_ts_total = 0,
 	priv->delivery_system = -1;
@@ -1841,7 +1842,7 @@ struct dvb_frontend *avl6862_attach(struct avl6862_config *config,
 	dev_info(&priv->i2c->dev, "%s: found AVL%d " \
 				"family_id=0x%x", KBUILD_MODNAME, id, fid);
 
-        if (config->tuner_address) {
+        if (config->dual_tuner) {
 		if (!avl6862_set_dvbmode(&priv->frontend, SYS_DVBS))
 		    return &priv->frontend;
 	} 

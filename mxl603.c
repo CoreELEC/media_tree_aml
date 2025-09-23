@@ -151,6 +151,9 @@ struct mxl603_state {
 	u8 addr;
 	u32 frequency;
 	u32 bandwidth;
+
+	/* Copy of the config provided to the mxl603_attach */
+	struct mxl603_config _cfg;
 };
 
 static int mxl603_write_reg(struct mxl603_state *state, u8 reg, u8 val)
@@ -1059,7 +1062,8 @@ struct dvb_frontend *mxl603_attach(struct dvb_frontend *fe,
 		goto err1;
 	}
 	
-	state->config = config;
+	memcpy(&state->_cfg, config, sizeof(state->_cfg));
+	state->config = &state->_cfg;
 	state->i2c = i2c;
 	state->addr = addr;
 	
