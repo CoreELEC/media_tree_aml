@@ -27,6 +27,7 @@
 #include "r848.h"
 #include "r912.h"
 #include "av201x_avl_top.h"
+#include "cxd2878.h"
 
 static void aml_dvb_extern_reset(const struct gpio_config *reset)
 {
@@ -258,6 +259,47 @@ struct dvb_frontend *aml_av2018_attach(struct dvb_frontend *fe,
 	return aml_av201x_attach(fe, cfg, ID_AV2018);
 }
 
+struct dvb_frontend *aml_cxd2878_attach(const struct demod_config *cfg)
+{
+	struct cxd2878_config cxd2878cfg = {
+		.addr_slvt = cfg->i2c_addr,
+		.xtal = cfg->xtal, /* XTAL Frequency, 0: 16MHz; 1: 24MHz, 2: 32MHz */
+		.tuner_addr = 0, /* tuner handeled outside the demod driver */
+		.tuner_xtal = 0,
+		.ts_mode = cfg->ts_out_mode, /* ts_out_mode: serial or parallel; 0: serial, 1: parallel. */
+		.ts_ser_data = cfg->ts_data_pin, /* Serial output pin of TS data. 0: Output from TSDATA0, 1: Output from TSDATA7 */
+		.ts_clk = cfg->ts_clk, /* Serial TS clock gated on valid TS data or is continuous. 0: Gated, 1: Continuous */
+		.ts_clk_mask = 1,
+		.ts_valid = 0,
+		.atscCoreDisable = 0,
+		.lock_flag = 1,
+		.write_properties = NULL,
+		.read_properties = NULL,
+		.write_eeprom = NULL,
+		.read_eeprom = NULL,
+		.RF_switch = NULL,
+		.rf_port = 0,
+		.TS_switch = NULL,
+		.LED_switch = NULL,
+	};
+
+	struct dvb_frontend *fe = cxd2878_attach(&cxd2878cfg, cfg->i2c_adap);
+	if (IS_ERR_OR_NULL(fe))
+		return NULL;
+
+	if (cfg->tuner0.id != AM_TUNER_NONE) {
+		const struct tuner_module * tuner = aml_get_tuner_module(cfg->tuner0.id);
+		if (tuner->attach(tuner, fe, &cfg->tuner0) == NULL) {
+			pr_err("CXD2878: failed to attach tuner0 %s\n", tuner->name);
+		}
+	}
+	else {
+		pr_err("CXD2878: Missing tuner0 config\n");
+	}
+
+	return fe;
+}
+
 static int __init aml_dvb_extern_wrappers_init(void)
 {
 	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
@@ -270,6 +312,7 @@ static int __init aml_dvb_extern_wrappers_init(void)
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL6762, aml_avl6762_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL6221C, aml_avl6221c_attach);
+	demod_attach_register_cb(AM_DTV_DEMOD_CXD2878, aml_cxd2878_attach);
 	return 0;
 }
 
