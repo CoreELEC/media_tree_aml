@@ -22,6 +22,7 @@
 #include <linux/amlogic/aml_tuner.h>
 #include "avl6862.h"
 #include "mxl603.h"
+#include "m88rs6060.h"
 
 struct dvb_frontend *aml_avl68xx_attach(const struct demod_config *cfg)
 {
@@ -92,9 +93,48 @@ struct dvb_frontend *aml_mxl603_attach(struct dvb_frontend *fe,
 	return mxl603_attach(fe, cfg->i2c_adap, cfg->i2c_addr, &mxl603cfg);
 }
 
+struct dvb_frontend *aml_m88dm6k_attach(const struct demod_config *cfg)
+{
+	struct i2c_client *client;
+	struct i2c_board_info info;
+	struct m88rs6060_cfg m88rs6060_config;
+	struct dvb_frontend *fe;
+
+/* settings taken from tbs5930_frontend_m88rs6060_attach */
+	memset(&m88rs6060_config,0,sizeof(m88rs6060_config));
+	m88rs6060_config.fe = &fe;
+	m88rs6060_config.clk = 27000000;
+	m88rs6060_config.i2c_wr_max = 33;
+	m88rs6060_config.ts_mode = cfg->ts_out_mode ? MtFeTsOutMode_Parallel : MtFeTsOutMode_Serial;
+	m88rs6060_config.demod_adr = cfg->i2c_addr;
+	m88rs6060_config.tuner_adr = 0x2c;
+	m88rs6060_config.repeater_value = 0x11;
+
+	memset(&info, 0, sizeof(struct i2c_board_info));
+	strlcpy(info.type, "m88rs6060", I2C_NAME_SIZE);
+	info.addr = cfg->i2c_addr;
+	info.platform_data = &m88rs6060_config;
+	request_module(info.type);
+	client = i2c_new_client_device(cfg->i2c_adap, &info);
+	if(IS_ERR_OR_NULL(client) || IS_ERR_OR_NULL(client->dev.driver)) {
+		pr_err("M88RS6060: failed to attach i2c client\n");
+		return NULL;
+	}
+	if (!try_module_get(client->dev.driver->owner)) {
+		i2c_unregister_device(client);
+		pr_err("M88RS6060: failed to load module?\n");
+		return NULL;
+	}
+
+	pr_info("M88RS6060: demod attached\n");
+	return fe;
+}
+EXPORT_SYMBOL_GPL(aml_m88dm6k_attach);
+
 static int __init aml_dvb_extern_wrappers_init(void)
 {
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL68xx, aml_avl68xx_attach);
+	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
 	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
 	return 0;
 }
