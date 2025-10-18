@@ -133,9 +133,9 @@ EXPORT_SYMBOL_GPL(aml_m88dm6k_attach);
 
 static int __init aml_dvb_extern_wrappers_init(void)
 {
+	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL68xx, aml_avl68xx_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
-	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
 	return 0;
 }
 
