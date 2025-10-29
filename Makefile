@@ -13,11 +13,13 @@ dvb_meson-objs = \
 	mxl608.o \
 	avl6862.o \
 	r912.o \
+	r848.o \
 	tuner_ftm4862.o \
 	rda5815m.o
 
 EXTRA_CFLAGS += \
 	-DDUAL_TUNER \
+	-DCONFIG_MEDIA_TUNER_R848 \
 	-I. \
 	-Idrivers/media/dvb-core \
 	-Idrivers/media/usb/dvb-usb \
