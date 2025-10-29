@@ -128,6 +128,9 @@ struct r848_priv {
 
 
 	R848_Sys_Info_Type Sys_Info1;
+
+	/* Copy of the config provided to the r848_attach */
+	struct r848_config 		_cfg;
 };
 
 

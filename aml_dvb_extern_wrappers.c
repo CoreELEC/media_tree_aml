@@ -23,6 +23,7 @@
 #include "avl6862.h"
 #include "mxl603.h"
 #include "m88rs6060.h"
+#include "r848.h"
 
 struct dvb_frontend *aml_avl68xx_attach(const struct demod_config *cfg)
 {
@@ -93,6 +94,35 @@ struct dvb_frontend *aml_mxl603_attach(struct dvb_frontend *fe,
 	return mxl603_attach(fe, cfg->i2c_adap, cfg->i2c_addr, &mxl603cfg);
 }
 
+struct dvb_frontend *aml_r848_attach(struct dvb_frontend *fe,
+				       const struct tuner_config *cfg)
+{
+	struct r848_config r848cfg = {
+		.i2c_address = cfg->i2c_addr,
+		.xtal = cfg->xtal, /* XTAL Frequency in Hz, typicaly 16000000 */
+		.R848_DetectTfType = 0, /* 0: R848_UL_USING_BEAD, 1: R848_UL_USING_270NH */
+		.R848_Xtal_Pwr = 3, /*
+				0 = XTAL_SMALL_LOWEST
+				1 = XTAL_SMALL_LOW,
+				2 = XTAL_SMALL_HIGH,
+				3 = XTAL_SMALL_HIGHEST,
+				4 = XTAL_LARGE_HIGHEST,
+				5 = XTAL_CHECK_SIZE */
+		.R848_Xtal_Pwr_tmp = 4, /* same as R848_Xtal_Pwr */
+		.R848_SetTfType = 1, /*
+				0 = R848_TF_NARROW			270n/68n   (ISDB-T, DVB-T/T2)
+				1 = R848_TF_BEAD			Bead/68n   (DTMB)
+				2 = R848_TF_NARROW_LIN		270n/68n   (N/A)
+				3 = R848_TF_NARROW_ATV_LIN	270n/68n   (ATV)
+				4 = R848_TF_BEAD_LIN		Bead/68n   (PAL_DK for China Hybrid TV)
+				5 = R848_TF_NARROW_ATSC		270n/68n   (ATSC, DVB-C, J83B)
+				6 = R848_TF_BEAD_LIN_ATSC	Bead/68n   (ATSC, DVB-C, J83B)
+				7 = R848_TF_82N_BEAD		Bead/82n   (DTMB)
+				8 = R848_TF_82N_270N		270n/82n   (OTHER Standard) */
+	};
+	return r848_attach(fe, &r848cfg, cfg->i2c_adap);
+}
+
 struct dvb_frontend *aml_m88dm6k_attach(const struct demod_config *cfg)
 {
 	struct i2c_client *client;
@@ -134,6 +164,7 @@ EXPORT_SYMBOL_GPL(aml_m88dm6k_attach);
 static int __init aml_dvb_extern_wrappers_init(void)
 {
 	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
+	tuner_attach_register_cb(AM_TUNER_R848, aml_r848_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL68xx, aml_avl68xx_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
 	return 0;
