@@ -5595,7 +5595,8 @@ struct dvb_frontend *r912_attach(struct dvb_frontend *fe,
 		return NULL;
 	}
 
-	priv->cfg = cfg;
+	memcpy(&priv->_cfg, cfg, sizeof(priv->_cfg));
+	priv->cfg = &priv->_cfg;
 	priv->i2c = i2c;
 	priv->inited = 0;
 

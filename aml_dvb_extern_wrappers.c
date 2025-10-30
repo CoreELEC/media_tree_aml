@@ -24,6 +24,7 @@
 #include "mxl603.h"
 #include "m88rs6060.h"
 #include "r848.h"
+#include "r912.h"
 
 struct dvb_frontend *aml_avl68xx_attach(const struct demod_config *cfg)
 {
@@ -123,6 +124,15 @@ struct dvb_frontend *aml_r848_attach(struct dvb_frontend *fe,
 	return r848_attach(fe, &r848cfg, cfg->i2c_adap);
 }
 
+struct dvb_frontend *aml_r912_attach(struct dvb_frontend *fe,
+				       const struct tuner_config *cfg)
+{
+	struct r912_config r912cfg = {
+		.i2c_address = cfg->i2c_addr,
+	};
+	return r912_attach(fe, &r912cfg, cfg->i2c_adap);
+}
+
 struct dvb_frontend *aml_m88dm6k_attach(const struct demod_config *cfg)
 {
 	struct i2c_client *client;
@@ -165,6 +175,7 @@ static int __init aml_dvb_extern_wrappers_init(void)
 {
 	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
 	tuner_attach_register_cb(AM_TUNER_R848, aml_r848_attach);
+	tuner_attach_register_cb(AM_TUNER_R912, aml_r912_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL68xx, aml_avl68xx_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
 	return 0;
