@@ -38,12 +38,6 @@
 //----------------------------------------------------------//
 //                      r912_priv                           //
 //----------------------------------------------------------//
-struct r912_priv {
-	struct r912_config *cfg;
-	struct i2c_adapter *i2c;
-	u8 inited;
-};
-
 struct r912_config {
 	/* tuner i2c address */
 	u8 i2c_address;
@@ -59,6 +53,15 @@ struct r912_config {
 //	u8 R912_SetTfType;
 //	R912_Sys_Info_Type Sys_Info1;
 	/* DVBT */
+};
+
+struct r912_priv {
+	struct r912_config *cfg;
+	struct i2c_adapter *i2c;
+	u8 inited;
+
+	/* Copy of the config provided to the r912_attach */
+	struct r912_config _cfg;
 };
 //----------------------------------------------------------//
 //                          I2C                             //
