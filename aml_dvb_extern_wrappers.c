@@ -26,11 +26,11 @@
 #include "r848.h"
 #include "r912.h"
 
-struct dvb_frontend *aml_avl68xx_attach(const struct demod_config *cfg)
+static struct dvb_frontend *aml_avl6x62_attach(const struct demod_config *cfg, bool dual_tuner)
 {
 	struct avl6862_config avl68xxcfg = {
 		.demod_address = cfg->i2c_addr,
-		.dual_tuner = cfg->tuner1.id != AM_TUNER_NONE ? 1 : 0,
+		.dual_tuner = dual_tuner,
 		.ts_serial = cfg->ts_out_mode ? 0 : 1, /* ts_out_mode: serial or parallel; 0: serial, 1: parallel. */
 		.gpio_lock_led = 0,
 	};
@@ -54,6 +54,14 @@ struct dvb_frontend *aml_avl68xx_attach(const struct demod_config *cfg)
 	}
 
 	return fe;
+}
+
+struct dvb_frontend *aml_avl68xx_attach(const struct demod_config *cfg) {
+	return aml_avl6x62_attach(cfg, true);
+}
+
+struct dvb_frontend *aml_avl6762_attach(const struct demod_config *cfg) {
+	return aml_avl6x62_attach(cfg, false);
 }
 
 struct dvb_frontend *aml_mxl603_attach(struct dvb_frontend *fe,
@@ -177,6 +185,7 @@ static int __init aml_dvb_extern_wrappers_init(void)
 	tuner_attach_register_cb(AM_TUNER_R848, aml_r848_attach);
 	tuner_attach_register_cb(AM_TUNER_R912, aml_r912_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL68xx, aml_avl68xx_attach);
+	demod_attach_register_cb(AM_DTV_DEMOD_AVL6762, aml_avl6762_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
 	return 0;
 }
