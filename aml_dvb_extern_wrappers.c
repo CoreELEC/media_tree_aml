@@ -28,6 +28,7 @@
 #include "r912.h"
 #include "av201x_avl_top.h"
 #include "cxd2878.h"
+#include "m88tc6800.h"
 
 static void aml_dvb_extern_reset(const struct gpio_config *reset)
 {
@@ -299,6 +300,19 @@ struct dvb_frontend *aml_cxd2878_attach(const struct demod_config *cfg)
 	return fe;
 }
 
+struct dvb_frontend *aml_m88tc6800_attach(struct dvb_frontend *fe,
+				       const struct tuner_config *cfg)
+{
+	struct m88tc6800_config m88tc6800cfg = {
+		.addr = cfg->i2c_addr,
+		.xtal = cfg->xtal == 0 ? 24000 : 27000, /* XTAL Frequency, 0: 24MHz; 1: 27MHz */
+		.xtal_cap = cfg->xtal_cap, /* XTAL capacity, 1 LSB = 1pF, maximum is 31pF */
+		.dac_gain = 2,
+		.dac = 4570,
+	};
+	return m88tc6800_attach(fe, cfg->i2c_adap, &m88tc6800cfg);
+}
+
 static int __init aml_dvb_extern_wrappers_init(void)
 {
 	int m88rs6060_i2c_register(void);
@@ -311,6 +325,7 @@ static int __init aml_dvb_extern_wrappers_init(void)
 	tuner_attach_register_cb(AM_TUNER_AV2011, aml_av2011_attach);
 	tuner_attach_register_cb(AM_TUNER_AV2012, aml_av2012_attach);
 	tuner_attach_register_cb(AM_TUNER_AV2018, aml_av2018_attach);
+	tuner_attach_register_cb(AM_TUNER_M88TC6K, aml_m88tc6800_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL68xx, aml_avl68xx_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL6762, aml_avl6762_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
