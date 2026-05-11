@@ -26,6 +26,19 @@
 #include "r848.h"
 #include "r912.h"
 
+static void aml_dvb_extern_reset(const struct gpio_config *reset)
+{
+		if (aml_gpio_is_valid(reset->pin)) {
+			pr_info("Demod: performing reset using gpio %d, with value %d\n",
+					reset->pin,
+					reset->value);
+			aml_gpio_direction_output(reset->pin, reset->value);
+			msleep(100);
+			aml_gpio_set_value(reset->pin, !reset->value);
+			msleep(100);
+		}
+}
+
 static struct dvb_frontend *aml_avl6x62_attach(const struct demod_config *cfg, bool dual_tuner)
 {
 	struct avl6862_config avl68xxcfg = {
@@ -35,6 +48,7 @@ static struct dvb_frontend *aml_avl6x62_attach(const struct demod_config *cfg, b
 		.gpio_lock_led = 0,
 	};
 
+	aml_dvb_extern_reset(&cfg->reset);
 	struct dvb_frontend *fe = avl6862_attach(&avl68xxcfg, cfg->i2c_adap);
 	if (IS_ERR_OR_NULL(fe))
 		return NULL;
@@ -100,6 +114,7 @@ struct dvb_frontend *aml_mxl603_attach(struct dvb_frontend *fe,
 		.xtal_sharing_mode = cfg->xtal_mode, /* XTAL sharing mode. default Master, MXL608_ENABLE to config Slave mode */
 		.single_supply_3_3V = cfg->dual_power ? 0 : 1, /* dual_power: 0: 3.3v, 1: 1.8v and 3.3v. */
 	};
+	aml_dvb_extern_reset(&cfg->reset);
 	return mxl603_attach(fe, cfg->i2c_adap, cfg->i2c_addr, &mxl603cfg);
 }
 
@@ -129,6 +144,7 @@ struct dvb_frontend *aml_r848_attach(struct dvb_frontend *fe,
 				7 = R848_TF_82N_BEAD		Bead/82n   (DTMB)
 				8 = R848_TF_82N_270N		270n/82n   (OTHER Standard) */
 	};
+	aml_dvb_extern_reset(&cfg->reset);
 	return r848_attach(fe, &r848cfg, cfg->i2c_adap);
 }
 
@@ -138,6 +154,7 @@ struct dvb_frontend *aml_r912_attach(struct dvb_frontend *fe,
 	struct r912_config r912cfg = {
 		.i2c_address = cfg->i2c_addr,
 	};
+	aml_dvb_extern_reset(&cfg->reset);
 	return r912_attach(fe, &r912cfg, cfg->i2c_adap);
 }
 
@@ -158,6 +175,7 @@ struct dvb_frontend *aml_m88dm6k_attach(const struct demod_config *cfg)
 	m88rs6060_config.tuner_adr = 0x2c;
 	m88rs6060_config.repeater_value = 0x11;
 
+	aml_dvb_extern_reset(&cfg->reset);
 	memset(&info, 0, sizeof(struct i2c_board_info));
 	strlcpy(info.type, "m88rs6060", I2C_NAME_SIZE);
 	info.addr = cfg->i2c_addr;
