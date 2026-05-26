@@ -24,13 +24,10 @@
 
 #define dbg_av(fmt, args...) \
 	do {\
-		if (debug_av)\
+		if (debug_avl)\
 			printk("AVL: %s: " fmt "\n", __func__, ##args);\
 	} while (0)
-MODULE_PARM_DESC(debug_avl, "\n\t\t Enable AVL demodulator debug information");
-static int debug_av = 1;
-
-
+extern int debug_avl;
 
 /* write one register */
 static int av201x_wr(struct AVL_Tuner * pTuner, u8 addr, u8 data)
@@ -179,7 +176,8 @@ struct dvb_frontend *av201x_avl_attach(struct dvb_frontend *fe,
 		return NULL;
 	}
 
-	priv->cfg = cfg;
+	memcpy(&priv->_cfg, cfg, sizeof(priv->_cfg));
+	priv->cfg = &priv->_cfg;
 	priv->i2c = i2c;
 
   priv->pTuner =  kzalloc(sizeof(struct AVL_Tuner), GFP_KERNEL);

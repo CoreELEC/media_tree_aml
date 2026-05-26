@@ -31,7 +31,6 @@ extern "C"
   ///////////////////////////////////////////////////////
   typedef unsigned char UINT8;
 
-  typedef short AVL_int16;
   typedef unsigned short UINT16;
 
   typedef int INT32;

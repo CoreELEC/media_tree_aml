@@ -24,8 +24,6 @@
 
 #include <linux/kconfig.h>
 #include <media/dvb_frontend.h>
-//#include "dvb_frontend.h"
-#include "av201x_avl_top_priv.h"
 
 typedef enum av201x_id {
 	ID_AV2011,

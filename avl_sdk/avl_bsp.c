@@ -56,7 +56,7 @@ AVL_uint32 AVL_IBSP_Initialize(void)
   return (0);
 }
 
-AVL_uint32 AVL_IBSP_Reset()
+AVL_uint32 AVL_IBSP_Reset(void)
 {
   return (0);
 }
