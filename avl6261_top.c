@@ -33,18 +33,13 @@
 #include "AVL62X1_API.h"
 #include "AVL_Tuner.h"
 
-//#include "avl6261_fw.h"
-
 #define dbg_avl(fmt, args...)                         \
   do                                                  \
   {                                                   \
     if (debug_avl)                                    \
       printk("AVL: %s: " fmt "\n", __func__, ##args); \
   } while (0);
-
-MODULE_PARM_DESC(debug_avl, "\n\t\t Enable AVL demodulator debug information");
-static int debug_avl;
-module_param(debug_avl, int, 0644);
+extern int debug_avl;
 
 AVL_Tuner default_avl_tuner = {
   .ucBlindScanMode = 0,
@@ -241,7 +236,7 @@ static int avl6261_set_dvbmode(struct dvb_frontend *fe,
   return ret;
 }
 
-AVL_ErrorCode AVL_SX_DiseqcSendCmd(struct avl6261_priv *priv, AVL_puchar pCmd, u8 CmdSize)
+static AVL_ErrorCode AVL_SX_DiseqcSendCmd(struct avl6261_priv *priv, AVL_puchar pCmd, u8 CmdSize)
 {
   AVL_ErrorCode r = AVL_EC_OK;
   struct AVL62X1_Diseqc_TxStatus TxStatus;
@@ -456,7 +451,7 @@ static int avl6261_read_ber(struct dvb_frontend *fe, u32 *ber)
   return ret;
 }
 
-static int avl6261fe_algo(struct dvb_frontend *fe)
+static enum dvbfe_algo avl6261fe_algo(struct dvb_frontend *fe)
 {
   return DVBFE_ALGO_HW;
 }
@@ -500,7 +495,7 @@ static int avl6261_tune(struct dvb_frontend *fe, bool re_tune,
 }
 
 static int avl6261_set_property(struct dvb_frontend *fe,
-                                u32 cmd, u32 data)
+                                struct dtv_property *prop)
 {
   int ret = 0;
   fe->ops.info.frequency_min_hz = 950000000;
@@ -601,7 +596,8 @@ struct dvb_frontend *avl6261_attach(struct avl6261_config *config,
          sizeof(struct dvb_frontend_ops));
 
   priv->frontend.demodulator_priv = priv;
-  priv->config = config;
+  memcpy(&priv->_config, config, sizeof(priv->_config));
+  priv->config = &priv->_config;
   priv->i2c = i2c;
   priv->delivery_system = -1;
   priv->chip = kzalloc(sizeof(struct AVL62X1_Chip), GFP_KERNEL);

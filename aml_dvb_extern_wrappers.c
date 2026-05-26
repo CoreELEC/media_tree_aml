@@ -21,10 +21,12 @@
 #include <linux/amlogic/aml_demod_common.h>
 #include <linux/amlogic/aml_tuner.h>
 #include "avl6862.h"
+#include "avl6261.h"
 #include "mxl603.h"
 #include "m88rs6060.h"
 #include "r848.h"
 #include "r912.h"
+#include "av201x_avl_top.h"
 
 static void aml_dvb_extern_reset(const struct gpio_config *reset)
 {
@@ -47,9 +49,10 @@ static struct dvb_frontend *aml_avl6x62_attach(const struct demod_config *cfg, b
 		.ts_serial = cfg->ts_out_mode ? 0 : 1, /* ts_out_mode: serial or parallel; 0: serial, 1: parallel. */
 		.gpio_lock_led = 0,
 	};
+	struct dvb_frontend *fe;
 
 	aml_dvb_extern_reset(&cfg->reset);
-	struct dvb_frontend *fe = avl6862_attach(&avl68xxcfg, cfg->i2c_adap);
+	fe = avl6862_attach(&avl68xxcfg, cfg->i2c_adap);
 	if (IS_ERR_OR_NULL(fe))
 		return NULL;
 
@@ -76,6 +79,35 @@ struct dvb_frontend *aml_avl68xx_attach(const struct demod_config *cfg) {
 
 struct dvb_frontend *aml_avl6762_attach(const struct demod_config *cfg) {
 	return aml_avl6x62_attach(cfg, false);
+}
+
+static struct dvb_frontend *aml_avl6221c_attach(const struct demod_config *cfg)
+{
+	struct avl6261_config avl6261cfg = {
+		.i2c_id = 0,
+		.i2c_adapter = cfg->i2c_adap,
+		.demod_address = cfg->i2c_addr,
+		.tuner_address = (cfg->tuner0.id != AM_TUNER_NONE) ? cfg->tuner0.i2c_addr : 0,
+		.eDiseqcStatus = 0,
+	};
+	struct dvb_frontend *fe;
+
+	aml_dvb_extern_reset(&cfg->reset);
+	fe = avl6261_attach(&avl6261cfg, cfg->i2c_adap);
+	if (IS_ERR_OR_NULL(fe))
+		return NULL;
+
+	if (cfg->tuner0.id != AM_TUNER_NONE) {
+		const struct tuner_module * tuner = aml_get_tuner_module(cfg->tuner0.id);
+		if (tuner->attach(tuner, fe, &cfg->tuner0) == NULL) {
+			pr_err("AVL6221c: failed to attach tuner0 %s\n", tuner->name);
+		}
+	}
+	else {
+		pr_err("AVL6221c: Missing tuner0 config\n");
+	}
+
+	return fe;
 }
 
 struct dvb_frontend *aml_mxl603_attach(struct dvb_frontend *fe,
@@ -195,16 +227,49 @@ struct dvb_frontend *aml_m88dm6k_attach(const struct demod_config *cfg)
 	pr_info("M88RS6060: demod attached\n");
 	return fe;
 }
-EXPORT_SYMBOL_GPL(aml_m88dm6k_attach);
+
+struct dvb_frontend *aml_av201x_attach(struct dvb_frontend *fe,
+				       const struct tuner_config *cfg, av201x_id_t id)
+{
+	struct av201x_avl_config av201xcfg = {
+		.i2c_address = cfg->i2c_addr,
+		.id = id,
+		.xtal_freq = cfg->xtal, /* XTAL Frequency in kHz */
+	};
+	aml_dvb_extern_reset(&cfg->reset);
+	return av201x_avl_attach(fe, &av201xcfg, cfg->i2c_adap);
+}
+
+struct dvb_frontend *aml_av2011_attach(struct dvb_frontend *fe,
+				       const struct tuner_config *cfg)
+{
+	return aml_av201x_attach(fe, cfg, ID_AV2011);
+}
+
+struct dvb_frontend *aml_av2012_attach(struct dvb_frontend *fe,
+				       const struct tuner_config *cfg)
+{
+	return aml_av201x_attach(fe, cfg, ID_AV2012);
+}
+
+struct dvb_frontend *aml_av2018_attach(struct dvb_frontend *fe,
+				       const struct tuner_config *cfg)
+{
+	return aml_av201x_attach(fe, cfg, ID_AV2018);
+}
 
 static int __init aml_dvb_extern_wrappers_init(void)
 {
 	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
 	tuner_attach_register_cb(AM_TUNER_R848, aml_r848_attach);
 	tuner_attach_register_cb(AM_TUNER_R912, aml_r912_attach);
+	tuner_attach_register_cb(AM_TUNER_AV2011, aml_av2011_attach);
+	tuner_attach_register_cb(AM_TUNER_AV2012, aml_av2012_attach);
+	tuner_attach_register_cb(AM_TUNER_AV2018, aml_av2018_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL68xx, aml_avl68xx_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_AVL6762, aml_avl6762_attach);
 	demod_attach_register_cb(AM_DTV_DEMOD_M88DM6K, aml_m88dm6k_attach);
+	demod_attach_register_cb(AM_DTV_DEMOD_AVL6221C, aml_avl6221c_attach);
 	return 0;
 }
 

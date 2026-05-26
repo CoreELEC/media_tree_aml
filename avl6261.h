@@ -37,6 +37,15 @@
 #define AVL6261_VERSION       "1." xstr(AVL62X1_API_VER_MAJOR) ".0"
 
 
+struct avl6261_config
+{
+  int i2c_id;        // i2c adapter (master) id
+  void *i2c_adapter; // i2c adapter (master)
+  uint8_t demod_address;  // demodulator i2c address
+  uint8_t tuner_address;  // tuner i2c address
+  unsigned char eDiseqcStatus;
+};
+
 struct avl6261_priv
 {
   struct i2c_adapter *i2c;
@@ -45,15 +54,7 @@ struct avl6261_priv
   enum fe_delivery_system delivery_system;
   struct AVL62X1_Chip *chip;
   const struct firmware *fw;
-};
-
-struct avl6261_config
-{
-  int i2c_id;        // i2c adapter (master) id
-  void *i2c_adapter; // i2c adapter (master)
-  uint8_t demod_address;  // demodulator i2c address
-  uint8_t tuner_address;  // tuner i2c address
-  unsigned char eDiseqcStatus;
+  struct avl6261_config _config;
 };
 
 extern struct dvb_frontend *avl6261_attach(struct avl6261_config *config, struct i2c_adapter *i2c);

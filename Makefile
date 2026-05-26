@@ -15,12 +15,20 @@ dvb_meson-objs = \
 	r912.o \
 	r848.o \
 	tuner_ftm4862.o \
-	rda5815m.o
+	rda5815m.o \
+	avl6261_top.o \
+	av201x_avl_top.o \
+	av201x_avl_drv.o \
+	avl_sdk/avl_bsp.o \
+	avl_sdk/AVL62X1_API.o \
+	avl_sdk/AVL62X1_DVBSx.o \
+	avl_sdk/AVL62X1_Internal.o
+	
 
 EXTRA_CFLAGS += \
 	-DDUAL_TUNER \
 	-DCONFIG_MEDIA_TUNER_R848 \
-	-I. \
+	-I$(src)/avl_sdk \
 	-Idrivers/media/dvb-core \
 	-Idrivers/media/usb/dvb-usb \
 	-Idrivers/media/dvb-frontends \

@@ -38,7 +38,7 @@
 			dev_info(&priv->i2c->dev, "%s: %s: " fmt "\n", KBUILD_MODNAME, __func__, ##args);\
 	} while (0)
 MODULE_PARM_DESC(debug_avl, "\n\t\t Enable AVL demodulator debug information");
-static int debug_avl;
+int debug_avl;
 module_param(debug_avl, int, 0644);
 
 static int avl6862_i2c_rd(struct avl6862_priv *priv, u8 *buf, int len)
@@ -619,7 +619,7 @@ err:
 
 
 
-int  ErrorStatMode_Demod( struct avl6862_priv *priv,AVL_ErrorStatConfig stErrorStatConfig )
+static int  ErrorStatMode_Demod( struct avl6862_priv *priv,AVL_ErrorStatConfig stErrorStatConfig )
 {
 	int r = AVL_EC_OK;
 	u64 time_tick_num = 270000 *  stErrorStatConfig.uiTimeThresholdMs;
@@ -645,7 +645,7 @@ int  ErrorStatMode_Demod( struct avl6862_priv *priv,AVL_ErrorStatConfig stErrorS
 }
 
 
-int  ResetPER_Demod(  struct avl6862_priv *priv)
+static int  ResetPER_Demod(  struct avl6862_priv *priv)
 {
 	int r = AVL_EC_OK;
 	u32 uiTemp = 0;
@@ -681,7 +681,7 @@ static int InitErrorStat_Demod( struct avl6862_priv *priv )
 	return r;
 }
 
-int  DVBSx_Diseqc_Initialize_Demod( struct avl6862_priv *priv,AVL_Diseqc_Para *pDiseqcPara)
+static int  DVBSx_Diseqc_Initialize_Demod( struct avl6862_priv *priv,AVL_Diseqc_Para *pDiseqcPara)
 {
 	int r = AVL_EC_OK;
 	u32 i1 = 0;
@@ -1149,7 +1149,7 @@ static int AVL_Demod_DVBSx_Diseqc_SendModulationData(struct avl6862_priv *priv, 
 	return (r);
 }
 
-int  AVL_Demod_DVBSx_Diseqc_GetTxStatus( struct avl6862_priv *priv, AVL_Diseqc_TxStatus * pTxStatus)
+static int  AVL_Demod_DVBSx_Diseqc_GetTxStatus( struct avl6862_priv *priv, AVL_Diseqc_TxStatus * pTxStatus)
 {
 	int r = 0;
 	u32 i1 = 0;
@@ -1168,7 +1168,7 @@ int  AVL_Demod_DVBSx_Diseqc_GetTxStatus( struct avl6862_priv *priv, AVL_Diseqc_T
 	return (r);
 }
 
-int AVL_SX_DiseqcSendCmd(struct avl6862_priv *priv, AVL_puchar pCmd, u8 CmdSize)
+static int AVL_SX_DiseqcSendCmd(struct avl6862_priv *priv, AVL_puchar pCmd, u8 CmdSize)
 {
 	int r = AVL_EC_OK;
 	struct AVL_Diseqc_TxStatus TxStatus;
@@ -1191,7 +1191,7 @@ int AVL_SX_DiseqcSendCmd(struct avl6862_priv *priv, AVL_puchar pCmd, u8 CmdSize)
 }
 
 
-int  AVL_Demod_DVBSx_Diseqc_SendTone(struct avl6862_priv *priv, u8 ucTone, u8 ucCount)
+static int  AVL_Demod_DVBSx_Diseqc_SendTone(struct avl6862_priv *priv, u8 ucTone, u8 ucCount)
 {
 	int r = 0;
 	u32 i1 = 0;
