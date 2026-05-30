@@ -22,8 +22,8 @@ dvb_meson-objs = \
 	avl_sdk/avl_bsp.o \
 	avl_sdk/AVL62X1_API.o \
 	avl_sdk/AVL62X1_DVBSx.o \
-	avl_sdk/AVL62X1_Internal.o
-	
+	avl_sdk/AVL62X1_Internal.o \
+	m88rs6060.o
 
 EXTRA_CFLAGS += \
 	-DDUAL_TUNER \
