@@ -3747,7 +3747,15 @@ static struct i2c_driver m88rs6060_driver = {
 	.id_table = m88rs6060_id_table,
 };
 
-module_i2c_driver(m88rs6060_driver);
+int m88rs6060_i2c_register(void)
+{
+	return i2c_add_driver(&m88rs6060_driver);
+}
+
+void m88rs6060_i2c_unregister(void)
+{
+	i2c_del_driver(&m88rs6060_driver);
+}
 
 MODULE_AUTHOR("Davin zhang <Davin@tbsdtv.com>");
 MODULE_DESCRIPTION("Montage M88RS6060 driver");
