@@ -1009,19 +1009,20 @@ static void si5351_set_freq(struct si5351_priv *priv,u32 freq, u32 pll_freq, enu
 static int rs6060_set_reg(struct m88rs6060_dev *dev, u8 reg, u8 data)
 {
 
+	u8 select[] = { 0x03, 0x11 };
 	u8 buf[] = { reg, data };
-	u8 val;
 	int ret;
-	struct i2c_msg msg = {
-		.addr = dev->config.tuner_adr,.flags = 0,.buf = buf,.len = 2
-	};
+	struct i2c_msg msg[] = {
+		{.addr = dev->config.demod_adr,.flags = 0,.buf = select,.len = ARRAY_SIZE(select)},
+		{.addr = dev->config.tuner_adr,.flags = 0,.buf = buf,.len = ARRAY_SIZE(buf)}};
 
-	val = 0x11;
-	ret = regmap_write(dev->regmap, 0x03, val);
-	if (ret)
+	i2c_lock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
+	ret = __i2c_transfer(dev->base->i2c, &msg[0], 1);
+	if (ret != 1)
 		dev_dbg(&dev->base->i2c->dev, "fail=%d\n", ret);
 
-	ret = i2c_transfer(dev->base->i2c, &msg, 1);
+	ret = __i2c_transfer(dev->base->i2c, &msg[1], 1);
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	if (ret != 1) {
 		dev_err(&dev->base->i2c->dev,
 			"0x%02x (ret=%i, reg=0x%02x, value=0x%02x)\n",
@@ -1040,28 +1041,34 @@ static int rs6060_get_reg(struct m88rs6060_dev *dev, u8 reg)
 
 	struct i2c_adapter *i2c = dev->base->i2c;
 	int ret;
-	unsigned val;
+	u8 select[] = { 0x03, dev->config.repeater_value };
 	u8 b0[] = { reg };
 	u8 b1[] = { 0 };
 	struct i2c_msg msg[] = {
 		{
+		 .addr = dev->config.demod_adr,
+		 .flags = 0,
+		 .buf = select,
+		 .len = ARRAY_SIZE(select)},
+		{
 		 .addr = dev->config.tuner_adr,
 		 .flags = 0,
 		 .buf = b0,
-		 .len = 1},
+		 .len = ARRAY_SIZE(b0)},
 		{
 		 .addr = dev->config.tuner_adr,
 		 .flags = I2C_M_RD,
 		 .buf = b1,
-		 .len = 1}
+		 .len = ARRAY_SIZE(b1)}
 	};
 
-	val = dev->config.repeater_value;
-	ret = regmap_write(dev->regmap, 0x03, val);
-	if (ret)
+	i2c_lock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
+	ret = __i2c_transfer(i2c, &msg[0], 1);
+	if (ret != 1)
 		dev_dbg(&i2c->dev, "fail=%d\n", ret);
 
-	ret = i2c_transfer(i2c, msg, 2);
+	ret = __i2c_transfer(i2c, &msg[1], 2);
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	if (ret != 2) {
 		dev_err(&i2c->dev, "0x%02x (ret=%d, reg=0x%02x)\n",
 			dev->config.tuner_adr, ret, reg);
@@ -1073,6 +1080,77 @@ static int rs6060_get_reg(struct m88rs6060_dev *dev, u8 reg)
 
 	return b1[0];
 
+}
+
+static int m88rs6060_i2c_write_unlocked(struct m88rs6060_dev *dev, u8 reg, u8 data)
+{
+	struct i2c_adapter *i2c = dev->base->i2c;
+	u8 buf[] = { reg, data };
+	struct i2c_msg msg[] = {
+		{.addr = dev->config.demod_adr,.flags = 0,.buf = buf,.len = ARRAY_SIZE(buf)},
+	};
+	int ret;
+
+	ret = __i2c_transfer(i2c, msg, ARRAY_SIZE(msg));
+	if (ret != ARRAY_SIZE(msg)) {
+		dev_err(&i2c->dev,
+			"0x%02x (ret=%i, reg=0x%02x, value=0x%02x)\n",
+			dev->config.demod_adr, ret, reg, data);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int m88rs6060_i2c_bulk_write_unlocked(struct m88rs6060_dev *dev, u8 reg, u8 *data, u8 len)
+{
+	struct i2c_adapter *i2c = dev->base->i2c;
+	u8 buf[32] = { reg };
+	struct i2c_msg msg[] = {
+		{.addr = dev->config.demod_adr,.flags = 0,.buf = buf,.len = min((size_t)(len + 1), sizeof(buf))},
+	};
+	int ret;
+
+	memcpy(&buf[1], data, min((size_t)len, sizeof(buf) - 1));
+	ret = __i2c_transfer(i2c, msg, ARRAY_SIZE(msg));
+	if (ret != ARRAY_SIZE(msg)) {
+		dev_err(&i2c->dev,
+			"0x%02x (ret=%i, reg=0x%02x)\n",
+			dev->config.demod_adr, ret, reg);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int m88rs6060_i2c_read_unlocked(struct m88rs6060_dev *dev, u8 reg, u8 *val)
+{
+	struct i2c_adapter *i2c = dev->base->i2c;
+	int ret;
+	struct i2c_msg msg[] = {
+		{
+			.addr = dev->config.demod_adr,
+			.flags = 0,
+			.buf = &reg,
+			.len = 1,
+		},
+		{
+			.addr = dev->config.demod_adr,
+			.flags = I2C_M_RD,
+			.buf = val,
+			.len = 1,
+		},
+	};
+
+	ret = __i2c_transfer(i2c, msg, ARRAY_SIZE(msg));
+	if (ret != ARRAY_SIZE(msg)) {
+		dev_err(&i2c->dev,
+			"0x%02x (ret=%i, reg=0x%02x)\n",
+			dev->config.demod_adr, ret, reg);
+		return -EIO;
+	}
+
+	return 0;
 }
 
 static int m88rs6060_fireware_download(struct m88rs6060_dev *dev, u8 reg,
@@ -1100,7 +1178,7 @@ static int m88rs6060_fireware_download(struct m88rs6060_dev *dev, u8 reg,
 	return 0;
 }
 
-static int m88rs6060_update_bits(struct m88rs6060_dev *dev,
+static int m88rs6060_update_bits_unlocked(struct m88rs6060_dev *dev,
 				 u8 reg, u8 mask, u8 val)
 {
 	int ret;
@@ -1108,7 +1186,7 @@ static int m88rs6060_update_bits(struct m88rs6060_dev *dev,
 
 	/* no need for read if whole reg is written */
 	if (mask != 0xff) {
-		ret = regmap_read(dev->regmap, reg, &tmp);
+		ret = m88rs6060_i2c_read_unlocked(dev, reg, &tmp);
 		if (ret)
 			return ret;
 
@@ -1117,7 +1195,7 @@ static int m88rs6060_update_bits(struct m88rs6060_dev *dev,
 		val |= tmp;
 	}
 
-	return regmap_write(dev->regmap, reg, val);
+	return m88rs6060_i2c_write_unlocked(dev, reg, val);
 }
 
 static void m88rs6060_calc_PLS_gold_code(u8 * pNormalCode, u32 PLSGoldCode)
@@ -2943,13 +3021,16 @@ static int m88rs6060_set_voltage(struct dvb_frontend*fe,
 			lnb_power = 0;		
 			break;
 	}
+	i2c_lock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	utmp = lnb_power << 1 | voltage_sel << 0;
-	ret = m88rs6060_update_bits(dev, 0xa2, 0x03, utmp);
+	ret = m88rs6060_update_bits_unlocked(dev, 0xa2, 0x03, utmp);
 	if (ret)
 		goto err;
 
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	return 0;
 err:
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	dev_dbg(&i2c->dev, "failed=%d\n", ret);
 	return ret;
 	
@@ -2987,18 +3068,22 @@ static int m88rs6060_set_tone(struct dvb_frontend *fe,
 		goto err;
 	}
 
+	i2c_lock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	utmp = tone << 7 | dev->config.envelope_mode << 5;
-	ret = m88rs6060_update_bits(dev, 0xa2, 0xe0, utmp);
+	ret = m88rs6060_update_bits_unlocked(dev, 0xa2, 0xe0, utmp);
 	if (ret)
 		goto err;
 
 	utmp = 1 << 2;
-	ret = m88rs6060_update_bits(dev, 0xa1, reg_a1_mask, utmp);
+	ret = m88rs6060_update_bits_unlocked(dev, 0xa1, reg_a1_mask, utmp);
 	if (ret)
 		goto err;
 
+	m88rs6060_i2c_read_unlocked(dev, 0xa2, &utmp);
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	return 0;
  err:
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	dev_dbg(&i2c->dev, "failed=%d\n", ret);
 	return ret;
 }
@@ -3026,17 +3111,18 @@ static int m88rs6060_diseqc_send_master_cmd(struct dvb_frontend *fe, struct dvb_
 		goto err;
 	}
 
+	i2c_lock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	utmp = dev->config.envelope_mode << 5;
-	ret = m88rs6060_update_bits(dev, 0xa2, 0xe0, utmp);
+	ret = m88rs6060_update_bits_unlocked(dev, 0xa2, 0xe0, utmp);
 	if (ret)
 		goto err;
 
-	ret = regmap_bulk_write(dev->regmap, 0xa3, diseqc_cmd->msg,
+	ret = m88rs6060_i2c_bulk_write_unlocked(dev, 0xa3, diseqc_cmd->msg,
 				diseqc_cmd->msg_len);
 	if (ret)
 		goto err;
 
-	ret = regmap_write(dev->regmap, 0xa1,
+	ret = m88rs6060_i2c_write_unlocked(dev, 0xa1,
 			   (diseqc_cmd->msg_len - 1) << 3 | 0x07);
 	if (ret)
 		goto err;
@@ -3050,7 +3136,7 @@ static int m88rs6060_diseqc_send_master_cmd(struct dvb_frontend *fe, struct dvb_
 	usleep_range(utmp - 4000, utmp);
 
 	for (utmp = 1; !time_after(jiffies, timeout) && utmp;) {
-		ret = regmap_read(dev->regmap, 0xa1, &utmp);
+		ret = m88rs6060_i2c_read_unlocked(dev, 0xa1, &utmp);
 		if (ret)
 			goto err;
 		utmp = (utmp >> 6) & 0x1;
@@ -3061,14 +3147,14 @@ static int m88rs6060_diseqc_send_master_cmd(struct dvb_frontend *fe, struct dvb_
 			jiffies_to_msecs(jiffies) -
 			(jiffies_to_msecs(timeout) - SEND_MASTER_CMD_TIMEOUT));
 	} else {
-		dev_dbg(&i2c->dev, "diseqc tx timeout\n");
+		dev_err(&i2c->dev, "diseqc tx timeout\n");
 
-		ret = m88rs6060_update_bits(dev, 0xa1, 0xc0, 0x40);
+		ret = m88rs6060_update_bits_unlocked(dev, 0xa1, 0xc0, 0x40);
 		if (ret)
 			goto err;
 	}
 
-	ret = m88rs6060_update_bits(dev, 0xa2, 0xc0, 0x80);
+	ret = m88rs6060_update_bits_unlocked(dev, 0xa2, 0xc0, 0x80);
 	if (ret)
 		goto err;
 
@@ -3077,8 +3163,10 @@ static int m88rs6060_diseqc_send_master_cmd(struct dvb_frontend *fe, struct dvb_
 		goto err;
 	}
 
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	return 0;
  err:
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	dev_dbg(&i2c->dev, "failed=%d\n", ret);
 	return ret;
 }
@@ -3100,8 +3188,9 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 		goto err;
 	}
 
+	i2c_lock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	utmp = dev->config.envelope_mode << 5;
-	ret = m88rs6060_update_bits(dev, 0xa2, 0xe0, utmp);
+	ret = m88rs6060_update_bits_unlocked(dev, 0xa2, 0xe0, utmp);
 	if (ret)
 		goto err;
 
@@ -3118,7 +3207,7 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 		goto err;
 	}
 
-	ret = regmap_write(dev->regmap, 0xa1, burst);
+	ret = m88rs6060_i2c_write_unlocked(dev, 0xa1, burst);
 	if (ret)
 		goto err;
 
@@ -3130,7 +3219,7 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 	usleep_range(8500, 12500);
 
 	for (utmp = 1; !time_after(jiffies, timeout) && utmp;) {
-		ret = regmap_read(dev->regmap, 0xa1, &utmp);
+		ret = m88rs6060_i2c_read_unlocked(dev, 0xa1, &utmp);
 		if (ret)
 			goto err;
 		utmp = (utmp >> 6) & 0x1;
@@ -3143,12 +3232,12 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 	} else {
 		dev_dbg(&i2c->dev, "diseqc tx timeout\n");
 
-		ret = m88rs6060_update_bits(dev, 0xa1, 0xc0, 0x40);
+		ret = m88rs6060_update_bits_unlocked(dev, 0xa1, 0xc0, 0x40);
 		if (ret)
 			goto err;
 	}
 
-	ret = m88rs6060_update_bits(dev, 0xa2, 0xc0, 0x80);
+	ret = m88rs6060_update_bits_unlocked(dev, 0xa2, 0xc0, 0x80);
 	if (ret)
 		goto err;
 
@@ -3157,8 +3246,10 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 		goto err;
 	}
 
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	return 0;
  err:
+	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	dev_dbg(&i2c->dev, "failed=%d\n", ret);
 	return ret;
 }
@@ -3613,7 +3704,7 @@ static int m88rs6060_probe(struct i2c_client *client)
 	return ret;
 }
 
-static void m88rs6060_remove(struct i2c_client *client)
+static int m88rs6060_remove(struct i2c_client *client)
 {
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	
@@ -3637,6 +3728,7 @@ static void m88rs6060_remove(struct i2c_client *client)
 	dev->fe.demodulator_priv = NULL;
 
 	kfree(dev);
+	return 0;
 }
 
 static const struct i2c_device_id m88rs6060_id_table[] = {
@@ -3650,7 +3742,7 @@ static struct i2c_driver m88rs6060_driver = {
 	.driver = {
 		   .name = "m88rs6060",
 		   },
-	.probe = m88rs6060_probe,
+	.probe_new = m88rs6060_probe,
 	.remove = m88rs6060_remove,
 	.id_table = m88rs6060_id_table,
 };
