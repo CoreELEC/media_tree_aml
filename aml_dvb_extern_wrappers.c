@@ -302,6 +302,10 @@ struct dvb_frontend *aml_cxd2878_attach(const struct demod_config *cfg)
 
 static int __init aml_dvb_extern_wrappers_init(void)
 {
+	int m88rs6060_i2c_register(void);
+	int ret = m88rs6060_i2c_register();
+	if (ret)
+		return ret;
 	tuner_attach_register_cb(AM_TUNER_MXL603, aml_mxl603_attach);
 	tuner_attach_register_cb(AM_TUNER_R848, aml_r848_attach);
 	tuner_attach_register_cb(AM_TUNER_R912, aml_r912_attach);
@@ -316,7 +320,14 @@ static int __init aml_dvb_extern_wrappers_init(void)
 	return 0;
 }
 
+static void __exit aml_dvb_extern_wrappers_exit(void)
+{
+	void m88rs6060_i2c_unregister(void);
+	m88rs6060_i2c_unregister();
+}
+
 module_init(aml_dvb_extern_wrappers_init);
+module_exit(aml_dvb_extern_wrappers_exit);
 
 MODULE_DESCRIPTION("DVB demodulator driver wrappers for aml_dvb_extern module");
 MODULE_AUTHOR("Marek Czerski (ma.czerski@gmail.com)");
