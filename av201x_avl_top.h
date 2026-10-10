@@ -36,9 +36,6 @@ struct av201x_avl_config {
 	uint8_t i2c_address;
 	/* tuner type */
 	av201x_id_t id;
-
-	/* crystal freq in kHz */
-	uint32_t xtal_freq;
 };
 
 extern struct dvb_frontend *av201x_avl_attach(struct dvb_frontend *fe,

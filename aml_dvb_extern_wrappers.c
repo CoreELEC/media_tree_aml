@@ -156,7 +156,7 @@ struct dvb_frontend *aml_r848_attach(struct dvb_frontend *fe,
 {
 	struct r848_config r848cfg = {
 		.i2c_address = cfg->i2c_addr,
-		.xtal = cfg->xtal, /* XTAL Frequency in Hz, typicaly 16000000 */
+		.xtal = cfg->xtal == 0 ? 16000000 : 24000000, /* XTAL Frequency, 0: 16MHz; 1: 24MHz */
 		.R848_DetectTfType = 0, /* 0: R848_UL_USING_BEAD, 1: R848_UL_USING_270NH */
 		.R848_Xtal_Pwr = 3, /*
 				0 = XTAL_SMALL_LOWEST
@@ -235,7 +235,6 @@ struct dvb_frontend *aml_av201x_attach(struct dvb_frontend *fe,
 	struct av201x_avl_config av201xcfg = {
 		.i2c_address = cfg->i2c_addr,
 		.id = id,
-		.xtal_freq = cfg->xtal, /* XTAL Frequency in kHz */
 	};
 	aml_dvb_extern_reset(&cfg->reset);
 	return av201x_avl_attach(fe, &av201xcfg, cfg->i2c_adap);
