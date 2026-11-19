@@ -30,7 +30,12 @@
 #include <linux/log2.h>
 #include <linux/dynamic_debug.h>
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <linux/int_log.h>
+#else
 #include "media/dvb_math.h"
+#endif
 #include "media/dvb_frontend.h"
 #include "cxd2841er_wetek.h"
 #include "cxd2841er_priv_wetek.h"

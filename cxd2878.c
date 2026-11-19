@@ -4,6 +4,7 @@ Sony cxd2878 family
 Copyright (c) 2021 Davin zhang <Davin@tbsdtv.com> www.Turbosight.com
 */
 #include <linux/delay.h>
+#include <linux/version.h>
 #include <linux/errno.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -3824,6 +3825,7 @@ static int cxd2878_tune(struct dvb_frontend*fe,bool re_tune,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 static int cxd2878_set_property(struct dvb_frontend*fe,
 		struct dtv_property *tvp)
 {
@@ -3862,6 +3864,7 @@ static int cxd2878_set_property(struct dvb_frontend*fe,
 
 	return ret;
 }
+#endif
 static enum dvbfe_algo cxd2878_get_algo(struct dvb_frontend *fe)
 {
 	return DVBFE_ALGO_HW;
@@ -3969,8 +3972,13 @@ static const struct dvb_frontend_ops cxd2878_ops = {
 		SYS_ATSC},
 	.info = {
 			.name = "sony cxd2878 familly",
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+			.frequency_min_hz = 42*MHz,
+			.frequency_max_hz = 1002*MHz,
+#else
 			.frequency_min_hz = 45*MHz,
 			.frequency_max_hz = 868*MHz,
+#endif
 			.frequency_stepsize_hz = 1 * kHz,
 		    .caps = FE_CAN_INVERSION_AUTO |
 				FE_CAN_FEC_1_2 |
@@ -4006,7 +4014,9 @@ static const struct dvb_frontend_ops cxd2878_ops = {
 			.read_snr				= cxd2878_read_snr,
 			.read_ucblocks			= cxd2878_read_ucblocks,
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 			.set_property			= cxd2878_set_property,
+#endif
 			
 			.spi_read				= cxd2878_spi_read,
 			.spi_write				= cxd2878_spi_write,

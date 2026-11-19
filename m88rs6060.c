@@ -5,7 +5,12 @@
  * Copyright (c) 2021 Davin zhang <Davin@tbsdtv.com> www.Turbosight.com
  *
 */
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <linux/int_log.h>
+#else
 #include <media/dvb_math.h>
+#endif
 
 #include "m88rs6060_priv.h"
 #include <linux/mutex.h>
@@ -1182,7 +1187,7 @@ static int m88rs6060_update_bits_unlocked(struct m88rs6060_dev *dev,
 				 u8 reg, u8 mask, u8 val)
 {
 	int ret;
-	unsigned tmp;
+	u8 tmp;
 
 	/* no need for read if whole reg is written */
 	if (mask != 0xff) {
@@ -3044,6 +3049,7 @@ static int m88rs6060_set_tone(struct dvb_frontend *fe,
 	struct i2c_adapter *i2c = dev->base->i2c;
 	int ret;
 	unsigned int utmp, tone, reg_a1_mask;
+	u8 rd;
 
 	dev_dbg(&i2c->dev, "fe_sec_tone_mode=%d\n", fe_sec_tone_mode);
 
@@ -3079,7 +3085,7 @@ static int m88rs6060_set_tone(struct dvb_frontend *fe,
 	if (ret)
 		goto err;
 
-	m88rs6060_i2c_read_unlocked(dev, 0xa2, &utmp);
+	m88rs6060_i2c_read_unlocked(dev, 0xa2, &rd);
 	i2c_unlock_bus(dev->base->i2c, I2C_LOCK_ROOT_ADAPTER);
 	return 0;
  err:
@@ -3096,6 +3102,7 @@ static int m88rs6060_diseqc_send_master_cmd(struct dvb_frontend *fe, struct dvb_
 	struct i2c_adapter *i2c = dev->base->i2c;
 	int ret;
 	unsigned int utmp;
+	u8 rd;
 	unsigned long timeout;
 
 	dev_dbg(&i2c->dev, "msg=%*ph\n",
@@ -3136,10 +3143,10 @@ static int m88rs6060_diseqc_send_master_cmd(struct dvb_frontend *fe, struct dvb_
 	usleep_range(utmp - 4000, utmp);
 
 	for (utmp = 1; !time_after(jiffies, timeout) && utmp;) {
-		ret = m88rs6060_i2c_read_unlocked(dev, 0xa1, &utmp);
+		ret = m88rs6060_i2c_read_unlocked(dev, 0xa1, &rd);
 		if (ret)
 			goto err;
-		utmp = (utmp >> 6) & 0x1;
+		utmp = (rd >> 6) & 0x1;
 	}
 
 	if (utmp == 0) {
@@ -3179,6 +3186,7 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 	struct i2c_adapter *i2c = dev->base->i2c;
 	int ret;
 	unsigned int utmp, burst;
+	u8 rd;
 	unsigned long timeout;
 
 	dev_dbg(&i2c->dev, "fe_sec_mini_cmd=%d\n", fe_sec_mini_cmd);
@@ -3219,10 +3227,10 @@ static int m88rs6060_diseqc_send_burst(struct dvb_frontend *fe,
 	usleep_range(8500, 12500);
 
 	for (utmp = 1; !time_after(jiffies, timeout) && utmp;) {
-		ret = m88rs6060_i2c_read_unlocked(dev, 0xa1, &utmp);
+		ret = m88rs6060_i2c_read_unlocked(dev, 0xa1, &rd);
 		if (ret)
 			goto err;
-		utmp = (utmp >> 6) & 0x1;
+		utmp = (rd >> 6) & 0x1;
 	}
 
 	if (utmp == 0) {
@@ -3704,7 +3712,11 @@ static int m88rs6060_probe(struct i2c_client *client)
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void m88rs6060_remove(struct i2c_client *client)
+#else
 static int m88rs6060_remove(struct i2c_client *client)
+#endif
 {
 	struct m88rs6060_dev *dev = i2c_get_clientdata(client);
 	
@@ -3728,7 +3740,9 @@ static int m88rs6060_remove(struct i2c_client *client)
 	dev->fe.demodulator_priv = NULL;
 
 	kfree(dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 static const struct i2c_device_id m88rs6060_id_table[] = {
@@ -3742,7 +3756,11 @@ static struct i2c_driver m88rs6060_driver = {
 	.driver = {
 		   .name = "m88rs6060",
 		   },
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	.probe = m88rs6060_probe,
+#else
 	.probe_new = m88rs6060_probe,
+#endif
 	.remove = m88rs6060_remove,
 	.id_table = m88rs6060_id_table,
 };

@@ -211,7 +211,7 @@ struct dvb_frontend *aml_m88dm6k_attach(const struct demod_config *cfg)
 
 	aml_dvb_extern_reset(&cfg->reset);
 	memset(&info, 0, sizeof(struct i2c_board_info));
-	strlcpy(info.type, "m88rs6060", I2C_NAME_SIZE);
+	strscpy(info.type, "m88rs6060", I2C_NAME_SIZE);
 	info.addr = cfg->i2c_addr;
 	info.platform_data = &m88rs6060_config;
 	request_module(info.type);

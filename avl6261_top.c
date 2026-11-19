@@ -19,6 +19,7 @@
  */
 
 #include <linux/slab.h>
+#include <linux/version.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -494,6 +495,7 @@ static int avl6261_tune(struct dvb_frontend *fe, bool re_tune,
   return avl6261_read_status(fe, status);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 static int avl6261_set_property(struct dvb_frontend *fe,
                                 struct dtv_property *prop)
 {
@@ -504,6 +506,7 @@ static int avl6261_set_property(struct dvb_frontend *fe,
 
   return ret;
 }
+#endif
 
 static int avl6261_init(struct dvb_frontend *fe)
 {
@@ -571,7 +574,9 @@ static struct dvb_frontend_ops avl6261_ops = {
     .get_frontend_algo = avl6261fe_algo,
     .tune = avl6261_tune,
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
     .set_property = avl6261_set_property,
+#endif
     .set_frontend = avl6261_set_frontend,
 };
 
